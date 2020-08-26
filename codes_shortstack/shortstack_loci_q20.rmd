@@ -1,0 +1,452 @@
+---
+title: "shortstack_loci_q20"
+author: "Chenxin Li"
+date: "8/12/2020"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(readr)
+library(readxl)
+library(RColorBrewer)
+library(stringr)
+library(svglite)
+library(cowplot)
+library(emmeans)
+```
+
+#data
+```{r}
+count_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/shortstack_loci_siRNA_counts", pattern = "*.txt", full.names = T)
+
+count_data  <- sapply(count_list, read_delim, simplify = FALSE, delim = "\t") %>% 
+  bind_rows(.id = "id")
+
+head(count_data)
+```
+
+```{r}
+q20 <- count_data %>% 
+  filter(str_detect(id, "q20"))
+
+all_counts <- count_data %>% 
+  filter(str_detect(id, "q20") == F)
+```
+
+#identify samples and locus categories
+```{r}
+sample_des <- read_excel("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/sample_des_clvs12.xlsx")
+
+smRNA_comp <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/codes_and_output/smRNA_comp.csv")
+```
+
+
+```{r}
+sample_des_size <- smRNA_comp %>% 
+  inner_join(sample_des, by = c("sample_ID")) %>% 
+  select(-2, -3, -4, -5, -6)
+
+sample_des_size
+```
+
+
+```{r}
+q20_clean <- q20 %>%
+  mutate(library = X1) %>% 
+    mutate(sample_ID = case_when(
+    str_detect(library, "sperm.1") ~ "BS1", #1
+    str_detect(library, "Sperm2") ~ "BS2",  #2
+    str_detect(library, "Sperm4a") ~ "BS4a",  #3
+    str_detect(library, "sperm4b") ~ "BS4b",  #4
+    str_detect(library, "sperm6a") ~ "BS6a",  #5
+    str_detect(library, "sperm6b") ~ "BS6b",  #6
+    str_detect(library, "sperm.5b") ~ "SP5b", #7
+    str_detect(library, "sperm.5c") ~ "SP5c", #8
+    str_detect(library, "Bulk.15") ~ "B15",   #9
+    str_detect(library, "Bulk.20") ~ "B20",   #10
+    str_detect(library, "Bulk.25") ~ "B25",   #11
+    str_detect(library, "seedling4") ~ "SD4", #12
+    str_detect(library, "egg.9a") ~ "E9a",    #13
+    str_detect(library, "egg.9b") ~ "E9b",    #14
+    str_detect(library, "egg.9c") ~ "E9c",    #15
+    str_detect(library, "eggcell4") ~ "E4",   #16
+    str_detect(library, "eggcell3") ~ "E3",   #17
+    str_detect(library, "eggcell2") ~ "E2",   #18
+    str_detect(library, "ovary.no.egg.1a") ~ "OV1a",    #19
+    str_detect(library, "ovary.no.egg.1b") ~ "OV1b",    #20
+    str_detect(library, "Ovarynoegg2") ~ "OV2",         #21
+    str_detect(library, "SRR57") ~ "root",              #22
+    str_detect(library, "ab_control") ~ "ddm1_con",     #23
+    str_detect(library, "ddm1ab") ~ "ddm1",             #24
+    str_detect(library, "drm2-T-DNA_control") ~ "drm2_con",  #25 drm2-T-DNA_control.fastq
+    str_detect(library, "drm2-T-DNA.fas") ~ "drm2",          #26   
+    str_detect(library, "SRR2544786") ~ "em_dry", #27  
+    str_detect(library, "SRR5049778") ~ "an_pre",  #28
+    str_detect(library, "SRR5049779") ~ "an_mei",  #29
+    str_detect(library, "SRR5049780") ~ "an_mic",  #30
+    str_detect(library, "SRR5049781") ~ "an_bi",   #31
+    str_detect(library, "SRR5049786") ~ "ov_1st",  #32
+    str_detect(library, "SRR5049787") ~ "ov_2nd",  #33
+    str_detect(library, "SRR5049788") ~ "ov_3rd",  #34
+    str_detect(library, "SRR5049789") ~ "ov_4th",  #35
+    str_detect(library, "S3_1") ~ "S3_1",          #36
+    str_detect(library, "S3_2") ~ "S3_2",          #37
+    str_detect(library, "S3_3") ~ "S3_3",          #38
+    str_detect(library, "S5_1") ~ "S5_1",          #39
+    str_detect(library, "S5_2") ~ "S5_2",          #40
+    str_detect(library, "S5_3") ~ "S5_3",          #41
+    str_detect(library, "S7_1") ~ "S7_1",          #42
+    str_detect(library, "S7_2") ~ "S7_2",          #43
+    str_detect(library, "S7_3") ~ "S7_3",          #44
+    str_detect(library, "SRR2544787") ~ "em_12h",  #45
+    str_detect(library, "SRR2544788") ~ "em_24h",  #46
+    str_detect(library, "SRR771501") ~ "em_7DAF",  #47
+    str_detect(library, "SRR771500") ~ "en_7DAF",   #48
+    str_detect(library, "SD7") ~ "SD7", #49
+    str_detect(library, "zg1d") ~ "zg1d", #50
+    str_detect(library, "zg1e") ~ "zg1e",  #51
+    str_detect(library, "zg2d") ~ "zg2d",  #52
+    str_detect(library, "zg2e") ~ "zg2e",  #53
+    str_detect(library, "zg3a") ~ "zg3a", #54
+    str_detect(library, "zg3b") ~ "zg3b"  #55
+  )) %>% 
+  mutate(category = case_when(
+    str_detect(id, "egg_siRNA_loci") ~ "egg siRNA loci",
+    str_detect(id, "endosperm_siren") ~ "endosperm siren loci",
+    str_detect(id, "endosperm_siRNA_loci") ~ "endosperm siRNA loci",
+    str_detect(id, "ovary_siren") ~ "ovary siren loci",
+    str_detect(id, "ovary_siRNA_loci") ~ "ovary siRNA loci",
+    str_detect(id, "seedling_siRNA") ~ "seedling siRNA loci",
+    str_detect(id, "sperm_siRNA") ~ "sperm siRNA loci",
+    str_detect(id, "zygote_siRNA") ~ "zygote siRNA loci"
+  )) %>% 
+    inner_join(sample_des_size %>% 
+                 select(`total read`, `general siRNA`, sample_ID, sample_type, genotype), by = "sample_ID")
+
+head(q20_clean)
+```
+
+```{r}
+all_clean <- all_counts %>%
+    mutate(library = X1) %>% 
+    mutate(sample_ID = case_when(
+    str_detect(library, "sperm.1") ~ "BS1", #1
+    str_detect(library, "Sperm2") ~ "BS2",  #2
+    str_detect(library, "Sperm4a") ~ "BS4a",  #3
+    str_detect(library, "sperm4b") ~ "BS4b",  #4
+    str_detect(library, "sperm6a") ~ "BS6a",  #5
+    str_detect(library, "sperm6b") ~ "BS6b",  #6
+    str_detect(library, "sperm.5b") ~ "SP5b", #7
+    str_detect(library, "sperm.5c") ~ "SP5c", #8
+    str_detect(library, "Bulk.15") ~ "B15",   #9
+    str_detect(library, "Bulk.20") ~ "B20",   #10
+    str_detect(library, "Bulk.25") ~ "B25",   #11
+    str_detect(library, "seedling4") ~ "SD4", #12
+    str_detect(library, "egg.9a") ~ "E9a",    #13
+    str_detect(library, "egg.9b") ~ "E9b",    #14
+    str_detect(library, "egg.9c") ~ "E9c",    #15
+    str_detect(library, "eggcell4") ~ "E4",   #16
+    str_detect(library, "eggcell3") ~ "E3",   #17
+    str_detect(library, "eggcell2") ~ "E2",   #18
+    str_detect(library, "ovary.no.egg.1a") ~ "OV1a",    #19
+    str_detect(library, "ovary.no.egg.1b") ~ "OV1b",    #20
+    str_detect(library, "Ovarynoegg2") ~ "OV2",         #21
+    str_detect(library, "SRR57") ~ "root",              #22
+    str_detect(library, "ab_control") ~ "ddm1_con",     #23
+    str_detect(library, "ddm1ab") ~ "ddm1",             #24
+    str_detect(library, "drm2-T-DNA_control") ~ "drm2_con",  #25 drm2-T-DNA_control.fastq
+    str_detect(library, "drm2-T-DNA.fas") ~ "drm2",          #26   
+    str_detect(library, "SRR2544786") ~ "em_dry", #27  
+    str_detect(library, "SRR5049778") ~ "an_pre",  #28
+    str_detect(library, "SRR5049779") ~ "an_mei",  #29
+    str_detect(library, "SRR5049780") ~ "an_mic",  #30
+    str_detect(library, "SRR5049781") ~ "an_bi",   #31
+    str_detect(library, "SRR5049786") ~ "ov_1st",  #32
+    str_detect(library, "SRR5049787") ~ "ov_2nd",  #33
+    str_detect(library, "SRR5049788") ~ "ov_3rd",  #34
+    str_detect(library, "SRR5049789") ~ "ov_4th",  #35
+    str_detect(library, "S3_1") ~ "S3_1",          #36
+    str_detect(library, "S3_2") ~ "S3_2",          #37
+    str_detect(library, "S3_3") ~ "S3_3",          #38
+    str_detect(library, "S5_1") ~ "S5_1",          #39
+    str_detect(library, "S5_2") ~ "S5_2",          #40
+    str_detect(library, "S5_3") ~ "S5_3",          #41
+    str_detect(library, "S7_1") ~ "S7_1",          #42
+    str_detect(library, "S7_2") ~ "S7_2",          #43
+    str_detect(library, "S7_3") ~ "S7_3",          #44
+    str_detect(library, "SRR2544787") ~ "em_12h",  #45
+    str_detect(library, "SRR2544788") ~ "em_24h",  #46
+    str_detect(library, "SRR771501") ~ "em_7DAF",  #47
+    str_detect(library, "SRR771500") ~ "en_7DAF",   #48
+    str_detect(library, "SD7") ~ "SD7", #49
+    str_detect(library, "zg1d") ~ "zg1d", #50
+    str_detect(library, "zg1e") ~ "zg1e",  #51
+    str_detect(library, "zg2d") ~ "zg2d",  #52
+    str_detect(library, "zg2e") ~ "zg2e",  #53
+    str_detect(library, "zg3a") ~ "zg3a", #54
+    str_detect(library, "zg3b") ~ "zg3b"  #55
+  )) %>% 
+  mutate(category = case_when(
+    str_detect(id, "egg_siRNA_loci") ~ "egg siRNA loci",
+    str_detect(id, "endosperm_siren") ~ "endosperm siren loci",
+    str_detect(id, "endosperm_siRNA_loci") ~ "endosperm siRNA loci",
+    str_detect(id, "ovary_siren") ~ "ovary siren loci",
+    str_detect(id, "ovary_siRNA_loci") ~ "ovary siRNA loci",
+    str_detect(id, "seedling_siRNA") ~ "seedling siRNA loci",
+    str_detect(id, "sperm_siRNA") ~ "sperm siRNA loci",
+    str_detect(id, "zygote_siRNA") ~ "zygote siRNA loci"
+  )) %>% 
+    inner_join(sample_des_size %>% 
+                 select(`total read`, `general siRNA`, sample_ID, sample_type, genotype), by = "sample_ID")
+
+head(all_clean)
+```
+
+
+```{r}
+q20_sum <- q20_clean %>% 
+  gather("length", "counts", c(`20`, `21`, `22`, `23`, `24`, `25`)) %>% 
+  group_by(sample_ID, category, `general siRNA`, sample_type) %>% 
+  summarise(q20.reads = sum(counts)) %>% 
+  mutate(proportion = q20.reads/`general siRNA`) 
+
+head(q20_sum)
+```
+```{r}
+all_sum <- all_clean %>% 
+  gather("length", "counts", c(`20`, `21`, `22`, `23`, `24`, `25`)) %>% 
+  group_by(sample_ID, category, `general siRNA`, sample_type) %>% 
+  summarise(all.reads = sum(counts)) %>% 
+  mutate(proportion = all.reads/`general siRNA`) 
+
+head(all_sum)
+```
+
+```{r}
+q20_all <- q20_sum %>%
+  select(sample_ID, category, q20.reads) %>% 
+  inner_join(all_sum, by = c("sample_ID", "category")) %>% 
+  mutate(q20_over_all = q20.reads/all.reads * 100) 
+
+head(q20_all)
+  
+```
+
+
+#matching loci to their small RNA transriptome
+```{r}
+EC <- q20_all %>% 
+  filter(sample_type == "egg") %>%
+  filter(category == "egg siRNA loci") 
+
+SP <- q20_all %>% 
+  filter(sample_type == "sperm") %>%
+  filter(category == "sperm siRNA loci")
+
+SD <- q20_all %>% 
+  filter(sample_type == "seedling shoot") %>%
+  filter(category == "seedling siRNA loci")
+
+ZY <- q20_all %>% 
+  filter(sample_type == "zygote") %>%
+  filter(category == "zygote siRNA loci")
+
+OV <- q20_all %>% 
+  filter(sample_type == "ovary") %>%
+  filter(category == "ovary siRNA loci" |
+           category == "ovary siren loci")
+
+EN <- q20_all %>% 
+  filter(str_detect(sample_type, "endo")) %>%
+  filter(category == "endosperm siRNA loci" |
+           category == "endosperm siren loci")
+```
+
+
+#plot
+```{r}
+proportion_data_lite <- EC %>% 
+  rbind(SP, SD, ZY, OV, EN) 
+
+head(proportion_data_lite)
+```
+
+##stat
+```{r}
+logit <- function(p){log(
+  p / (1-p)
+)}
+
+logistic <- function(x){
+  1/(1 + exp(-x))
+}
+```
+
+```{r}
+model_q20 <- lm(q20_over_all ~ category, data = proportion_data_lite)
+plot(model_q20)
+anova(model_q20)
+```
+```{r}
+est_q20 <- emmeans(model_q20, pairwise ~ category)
+multcomp::cld(est_q20$emmeans, Letters = letters)
+```
+
+
+```{r}
+proportion_data_lite %>% 
+  mutate(sample_type = case_when(
+    str_detect(sample_type, "endosp") ~ "endosperm",
+    str_detect(sample_type, "seedling") ~ "seedling",
+    T ~ sample_type
+  )) %>% 
+  ggplot(aes(x = category, y = q20_over_all)) +
+  geom_bar(stat = "summary", aes(group = sample_type), alpha = 0.8, fill= "grey40", fun.y = mean)  +
+  geom_point(aes(), shape = 21, color = "white", size = 3, alpha = 0.8, 
+             position = position_jitter(0.1, seed = 666), fill = "grey40") +
+  annotate(geom = "text", label = c(
+    "c", "de", "cd", "e", "cd", "b", "a", "c"
+  ), size = 5, fontface = "bold", y = 95, x = 1:8) +
+  scale_fill_manual(values = c("orangered3", "tomato1", "seagreen", "dodgerblue2", "violetred2", "lightgoldenrod4"),
+                    limits = c("ovary", "egg", "seedling", "sperm", "zygote", "endosperm")) +
+  labs(x = NULL,
+       y = "% uniquelly mapped\nreads",
+       fill = "siRNA transcriptome") +
+  guides(fill = guide_legend(nrow = 3)) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  theme(axis.line = element_line(size = 1.2),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),) +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black", hjust = 0.5))+
+  coord_flip()
+
+ggsave("q20_proportion.svg", height = 3, width = 5)
+ggsave("q20_proportion.png", height = 3, width = 5)
+```
+
+
+#only 24nt
+```{r}
+q20_24 <- q20_clean %>% 
+  #gather("length", "counts", c(`20`, `21`, `22`, `23`, `24`, `25`)) %>% 
+  mutate(proportion24 = `24`/`general siRNA`) 
+
+head(q20_24)
+```
+```{r}
+q20_all_24 <- q20_24 %>%
+  select(sample_ID, category, `24`) %>% 
+  inner_join(all_clean %>% 
+               select(sample_ID, category, `24`, sample_type), 
+             by = c("sample_ID", "category")) %>% 
+  mutate(q20_over_all = `24.x`/`24.y` * 100) 
+
+head(q20_all_24)
+```
+
+
+```{r}
+EC_24 <- q20_all_24 %>% 
+  filter(sample_type == "egg") %>%
+  filter(category == "egg siRNA loci") 
+
+SP_24 <- q20_all_24 %>% 
+  filter(sample_type == "sperm") %>%
+  filter(category == "sperm siRNA loci")
+
+SD_24 <- q20_all_24 %>% 
+  filter(sample_type == "seedling shoot") %>%
+  filter(category == "seedling siRNA loci")
+
+ZY_24 <- q20_all_24 %>% 
+  filter(sample_type == "zygote") %>%
+  filter(category == "zygote siRNA loci")
+
+OV_24 <- q20_all_24 %>% 
+  filter(sample_type == "ovary") %>%
+  filter(category == "ovary siRNA loci" |
+           category == "ovary siren loci")
+
+EN_24 <- q20_all_24 %>% 
+  filter(str_detect(sample_type, "endo")) %>%
+  filter(category == "endosperm siRNA loci" |
+           category == "endosperm siren loci")
+```
+
+
+```{r}
+proportion_data_lite_24 <- EC_24 %>% 
+  rbind(SP_24, SD_24, ZY_24, OV_24, EN_24) 
+
+head(proportion_data_lite_24)
+```
+
+```{r}
+proportion_data_lite_24 %>% 
+  mutate(sample_type = case_when(
+    str_detect(sample_type, "endosp") ~ "endosperm",
+    str_detect(sample_type, "seedling") ~ "seedling",
+    T ~ sample_type
+  )) %>% 
+  ggplot(aes(x = category, y = q20_over_all)) +
+  geom_bar(stat = "summary", aes(group = sample_type), alpha = 0.8, fill= "grey40", fun.y = mean)  +
+  geom_point(aes(), shape = 21, color = "white", size = 3, alpha = 0.8,    
+             position = position_jitter(0.1, seed = 666), fill = "grey40") +
+  scale_fill_manual(values = c("orangered3", "tomato1", "seagreen", "dodgerblue2", "violetred2", "lightgoldenrod4"),
+                    limits = c("ovary", "egg", "seedling", "sperm", "zygote", "endosperm")) +
+  labs(x = NULL,
+       y = "% uniquelly mapped reads",
+       fill = "siRNA transcriptome") +
+  guides(fill = guide_legend(nrow = 3)) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black", hjust = 0.5))+
+  coord_flip()
+```
+
+
+
+
+#Chisq tests
+```{r}
+proportion_data_lite %>% 
+  group_by(sample_type, category) %>% 
+  summarise(
+    mean_q20 = mean(q20.reads),
+    mean_all = mean(all.reads)
+  )
+```
+```{r}
+chisq.test(
+  rbind(c(1439721.7, 1747528.7 - 1439721.7),
+        c(1668033.7 - 1439721.7, 2222211.3 - 1747528.7 - (1668033.7 - 1439721.7)))
+)$p.value
+```
+
+
+```{r}
+chisq.test(
+  rbind(c(4711790, 5929268.0 - 4711790),
+        c(5716081.0 - 4711790, 7642602.0 - 5929268.0 - (5716081.0 - 4711790)))
+)$p.value
+```
+
+
+
+
+
+
+

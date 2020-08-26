@@ -1,0 +1,464 @@
+---
+title: "siren_nearest_gene_DNA_meta"
+author: "Chenxin Li"
+date: "4/30/2020"
+output: html_notebbook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(readr)
+library(readxl)
+library(RColorBrewer)
+library(stringr)
+library(svglite)
+library(forcats)
+library(patchwork)
+library(cowplot)
+```
+
+#data
+```{r}
+#all genes
+all_genes <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_smRNA_revision/code and output/methylation/g1_g3.csv")
+
+head(all_genes)
+```
+```{r}
+meta_list <-  list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/siren_loci_closest_gene_methylation_Apr30", 
+                         pattern = "*.meths", full.names = T)
+```
+
+```{r}
+siren_meta <- sapply(meta_list, read_delim, simplify = FALSE, 
+                    delim = "\t", 
+                    col_names = TRUE, 
+                    escape_double = FALSE, 
+                    trim_ws = TRUE) %>% 
+  bind_rows(.id = "id")  
+
+head(siren_meta)
+```
+
+```{r}
+ovary_meta_list <-  list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/ovary_siren_meta", 
+                         pattern = "*.meths", full.names = T)
+```
+
+```{r}
+ovary_siren_meta <- sapply(ovary_meta_list, read_delim, simplify = FALSE, 
+                    delim = "\t", 
+                    col_names = TRUE, 
+                    escape_double = FALSE, 
+                    trim_ws = TRUE) %>% 
+  bind_rows(.id = "id")  
+
+head(ovary_siren_meta)
+```
+
+#data arrangement
+```{r}
+gamete_siren_meta <- siren_meta %>% 
+  filter(str_detect(id, "egg|EC|sperm1")) %>% 
+  mutate(siren_type = case_when(
+    str_detect(id, "ovary_siren") ~ "ovary siren",
+    str_detect(id, "endosperm_siren") ~ "endo. siren"
+  )) %>% 
+  mutate(location = case_when(
+    str_detect(id, "upstream") ~ "5' end",
+    str_detect(id, "downstream") ~ "3' end"
+  )) %>% 
+  mutate(location = factor(location, levels = c(
+    "5' end", "3' end"
+  ))) %>% 
+  mutate(sample_ID = case_when(
+    str_detect(id,  "egg100_1") ~ "egg_1",
+    str_detect(id,  "egg100_2") ~ "egg_2",
+    str_detect(id,  "EC") ~ "egg Park et al",
+    str_detect(id,  "sperm1") ~ "sperm",
+  )) 
+
+gamete_siren_meta %>% 
+  group_by(sample_ID, location, siren_type) %>% 
+  count()
+```
+
+```{r}
+#head(gamete_siren_meta)
+gamete_siren_meta_long <- gamete_siren_meta %>% 
+  select(-CCH) %>% 
+  gather("context", "methylation", c(CG, CHG, CHH))
+
+colnames(gamete_siren_meta_long)[2] <- "bin.start"
+head(gamete_siren_meta_long)
+```
+
+```{r}
+ovary_siren_meta <- ovary_siren_meta %>% 
+  mutate(siren_type = case_when(
+    str_detect(id, "ovary_siren_loci") ~ "ovary siren",
+    str_detect(id, "endosperm_siren_loci") ~ "endo. siren"
+  )) %>% 
+  mutate(location = case_when(
+    str_detect(id, "upstream") ~ "5' end",
+    str_detect(id, "downstream") ~ "3' end"
+  )) %>% 
+  mutate(location = factor(location, levels = c(
+    "5' end", "3' end"
+  ))) %>% 
+  mutate(sample_ID = case_when(
+    str_detect(id,  "ov1") ~ "ov1",
+    str_detect(id,  "ov2") ~ "ov2",
+    str_detect(id,  "ov3") ~ "ov3",
+    str_detect(id,  "ov4") ~ "ov4",
+    str_detect(id,  "ov5") ~ "ov5",
+    str_detect(id,  "ov6") ~ "ov6"
+  )) 
+
+ovary_siren_meta %>% 
+  group_by(sample_ID, location, siren_type) %>% 
+  count()
+```
+```{r}
+ovary_siren_meta_long <- ovary_siren_meta %>% 
+  select(-CCH) %>% 
+  gather("context", "methylation", c(CG, CHG, CHH))
+
+colnames(ovary_siren_meta_long)[2] <- "bin.start"
+head(ovary_siren_meta_long)
+```
+
+
+#plot
+```{r}
+ axis_line <- data.frame(
+  `bin start` = c(-Inf),
+  location = c("5' end")
+)
+
+axis_line
+```
+
+##all genes and siren genes plotted together
+```{r}
+all_genes2 <- all_genes %>% 
+  filter(str_detect(sample_ID, "CC") == F) %>% 
+  filter(str_detect(sample_ID, "veg") == F) %>% 
+  filter(genotype == "WT") %>% 
+  mutate(location = factor(location, levels = c(
+    "5' end", "3' end"
+  ))) %>% 
+  filter(grouping == "g1") %>% 
+  mutate(sample_ID = sample_type) %>% 
+  mutate(siren_type = "all genes") %>% 
+  select(bin.start, sample_ID, location, context, methylation, siren_type)
+
+head(all_genes2)
+```
+
+```{r}
+gamete_siren_meta_long2 <- gamete_siren_meta_long %>% 
+  select(bin.start, sample_ID, location, context, methylation, siren_type) %>% 
+  rbind(all_genes2)
+
+head(gamete_siren_meta_long2)
+```
+```{r}
+gamete_siren_meta_long2 %>% 
+  group_by(sample_ID, siren_type) %>% 
+  count()
+```
+
+
+
+##EC
+```{r}
+EC <- gamete_siren_meta_long2 %>% 
+  filter(str_detect(sample_ID, "Park")) %>% 
+  mutate(context1 = case_when(
+    context == "CG" ~ "mCG",
+    context == "CHG" ~ "mCHG",
+    context == "CHH" ~ "mCHH"
+  )) %>% 
+  mutate(sample_ID2 = case_when(
+    str_detect(sample_ID, "Park") ~ "egg\nPark et al",
+    T ~ sample_ID
+  )) %>% 
+  filter(str_detect(siren_type, "endo") == F) %>% 
+  mutate(siren_type2 = case_when(
+    str_detect(siren_type, "all") ~ "all",
+    str_detect(siren_type, "ovary") ~ "ovary siren nearest",
+    str_detect(siren_type, "endo.") ~ "endo. siren nearest"
+  )) %>% 
+  ggplot(aes(x = bin.start, y = methylation), size = 2) +
+  geom_vline(data = axis_line, aes(xintercept = bin.start), size = 1.2) +
+  geom_hline(yintercept = -Inf, size = 1.2) +
+  geom_hline(yintercept = 0, color = NA) + 
+  facet_grid(context1 ~ location, scales = "free", switch = "y")+
+  geom_line(aes(color = siren_type2), size = 1, alpha = 0.8) +
+  scale_x_continuous(breaks = c(-3000, -2000, -1000, 0, 1000, 2000, 3000), labels = NULL)+
+  labs(x = NULL,
+       y = "Egg (Park et al)",
+       color = NULL, 
+       linetype = NULL) +
+  guides(colour = guide_legend(ncol = 2)) +
+  scale_color_manual(values = c("black", "orangered3")) +
+  theme_minimal() +
+  theme(legend.position = "bottom", 
+        strip.placement = "outside", 
+        legend.box = "vertical", 
+        legend.spacing.y = unit(-0.5, "lines")) +
+  theme(panel.spacing.y = unit(1, "lines")) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x = element_text(colour="black")) +
+  theme(axis.text.y = element_text(colour="black")) 
+
+EC
+
+ggsave("all_vs_ovary_siren_meta_egg_park.svg", width = 4.8, height = 5)
+ggsave("all_vs_ovary_siren_meta_egg_park.png", width = 4.8, height = 5)
+```
+
+##egg_1
+```{r}
+E1 <- gamete_siren_meta_long2 %>% 
+  filter(str_detect(sample_ID, "egg_1")) %>% 
+  mutate(context1 = case_when(
+    context == "CG" ~ "mCG",
+    context == "CHG" ~ "mCHG",
+    context == "CHH" ~ "mCHH"
+  )) %>% 
+  filter(str_detect(siren_type, "endo") == F) %>% 
+  mutate(siren_type2 = case_when(
+    str_detect(siren_type, "all") ~ "all",
+    str_detect(siren_type, "ovary") ~ "ovary siren nearest",
+    str_detect(siren_type, "endo.") ~ "endo. siren nearest"
+  )) %>% 
+  ggplot(aes(x = bin.start, y = methylation)) +
+  geom_vline(data = axis_line, aes(xintercept = bin.start), size = 1.2) +
+  geom_hline(yintercept = -Inf, size = 1.2) +
+  geom_hline(yintercept = 0, color = NA) + 
+  facet_grid(context1 ~ location, scales = "free", switch = "y")+
+  geom_line(aes(color = siren_type2), size = 1, alpha = 0.8) +
+  scale_x_continuous(breaks = c(-3000, -2000, -1000, 0, 1000, 2000, 3000), labels = NULL)+
+  labs(x = NULL,
+       y = "Egg_1 (Li et al)",
+       color = NULL, 
+       linetype = NULL) +
+  guides(colour = guide_legend(ncol = 2)) +
+  scale_color_manual(values = c("black", "orangered3")) +
+  theme_minimal() +
+  theme(legend.position = "bottom", 
+        strip.placement = "outside", 
+        legend.box = "vertical", 
+        legend.spacing.y = unit(-0.5, "lines")) +
+  theme(panel.spacing.y = unit(1, "lines")) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x = element_text(colour="black")) +
+  theme(axis.text.y = element_text(colour="black")) 
+
+E1
+
+ggsave("all_vs_ovary_siren_meta_egg_1.svg", width = 4.8, height = 5)
+ggsave("all_vs_ovary_siren_meta_egg_1.png", width = 4.8, height = 5)
+```
+
+##egg_2
+```{r}
+E2 <- gamete_siren_meta_long2 %>% 
+  filter(str_detect(sample_ID, "egg_2")) %>% 
+  mutate(context1 = case_when(
+    context == "CG" ~ "mCG",
+    context == "CHG" ~ "mCHG",
+    context == "CHH" ~ "mCHH"
+  )) %>% 
+  filter(str_detect(siren_type, "endo") == F) %>% 
+  mutate(siren_type2 = case_when(
+    str_detect(siren_type, "all") ~ "all",
+    str_detect(siren_type, "ovary") ~ "ovary siren nearest",
+    str_detect(siren_type, "endo.") ~ "endo. siren nearest"
+  )) %>% 
+  ggplot(aes(x = bin.start, y = methylation)) +
+  geom_vline(data = axis_line, aes(xintercept = bin.start), size = 1.2) +
+  geom_hline(yintercept = -Inf, size = 1.2) +
+  geom_hline(yintercept = 0, color = NA) + 
+  facet_grid(context1 ~ location, scales = "free", switch = "y")+
+  geom_line(aes(color = siren_type2), size = 1, alpha = 0.8) +
+  scale_x_continuous(breaks = c(-3000, -2000, -1000, 0, 1000, 2000, 3000), labels = NULL)+
+  labs(x = NULL,
+       y = "Egg_2 (Li et al)",
+       color = NULL, 
+       linetype = NULL) +
+  guides(colour = guide_legend(ncol = 2)) +
+  scale_color_manual(values = c("black", "orangered3")) +
+  theme_minimal() +
+  theme(legend.position = "bottom", 
+        strip.placement = "outside", 
+        legend.box = "vertical", 
+        legend.spacing.y = unit(-0.5, "lines")) +
+  theme(panel.spacing.y = unit(1, "lines")) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x = element_text(colour="black")) +
+  theme(axis.text.y = element_text(colour="black")) 
+
+E2
+
+ggsave("all_vs_ovary_siren_meta_egg_2.svg", width = 4.8, height = 5)
+ggsave("all_vs_ovary_siren_meta_egg_2.png", width = 4.8, height = 5)
+```
+
+##Ovary 
+```{r}
+all_genes3 <- all_genes %>% 
+  filter(sample_type == "ovary") %>% 
+  mutate(location = factor(location, levels = c(
+    "5' end", "3' end"
+  ))) %>% 
+  mutate(sample_ID = sample_type) %>% 
+  mutate(siren_type = "all genes") %>% 
+  select(bin.start, sample_ID, location, context, methylation, siren_type, sample_type)
+
+head(all_genes3)
+```
+
+```{r}
+ovary_siren_meta_long2 <- ovary_siren_meta_long %>% 
+  mutate(sample_type = "ovary") %>% 
+  select(bin.start, sample_ID, location, context, methylation, siren_type, sample_type) %>% 
+  rbind(all_genes3)
+
+head(ovary_siren_meta_long2)
+```
+
+```{r}
+OV <- ovary_siren_meta_long2 %>% 
+  mutate(context1 = case_when(
+    context == "CG" ~ "mCG",
+    context == "CHG" ~ "mCHG",
+    context == "CHH" ~ "mCHH"
+  )) %>% 
+  filter(siren_type != "endo. siren") %>%
+   mutate(siren_type2 = case_when(
+    str_detect(siren_type, "all") ~ "all",
+    str_detect(siren_type, "ovary") ~ "ovary siren nearest",
+    str_detect(siren_type, "endo.") ~ "endo. siren nearest"
+  )) %>% 
+  ggplot(aes(x = bin.start, y = methylation)) +
+  geom_vline(data = axis_line, aes(xintercept = bin.start), size = 1.2) +
+  geom_hline(yintercept = -Inf, size = 1.2) +
+  geom_hline(yintercept = 0, color = NA) + 
+  facet_grid(context1 ~ location, scales = "free", switch = "y")+
+  stat_summary(geom = "line", fun.y = mean, aes(group = siren_type, color = siren_type2), size = 1, alpha = 0.8) +
+  scale_x_continuous(breaks = c(-3000, -2000, -1000, 0, 1000, 2000, 3000), labels = NULL)+
+  labs(x = NULL,
+       y = "Ovary (Li et al)",
+       color = NULL) +
+  scale_color_manual(values = c("black", "orangered3")) +
+  guides(color = guide_legend(nrow = 1)) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        strip.placement = "outside", 
+        legend.direction = "vertical",
+        legend.title = element_text(hjust = 0.5)) +
+  theme(panel.spacing.y = unit(1, "lines")) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x = element_text(colour="black")) +
+  theme(axis.text.y = element_text(colour="black"))  
+   
+OV
+
+ggsave("all_vs_ovary_siren_meta_ov.svg", width = 4.8, height = 5)
+ggsave("all_vs_ovary_siren_meta_ov.png", width = 4.8, height = 5)
+```
+
+
+##cowplot
+```{r}
+plot_grid(OV, NULL, EC, NULL, NULL, NULL, E1, NULL, E2, ncol = 3, nrow = 3,
+          align = "hv", axis = "tbrl", rel_widths = c(1, 0.1, 1),
+          rel_heights = c(1, 0.05, 1))
+
+ggsave("all_vs_ov_siren_composed.svg", height = 12, width = 10)
+ggsave("all_vs_ov_siren_composed.png", height = 12, width = 10)
+```
+
+
+
+
+
+
+
+
+
+```{r}
+ovary_siren_meta_long2 %>% 
+  mutate(context1 = case_when(
+    context == "CG" ~ "mCG",
+    context == "CHG" ~ "mCHG",
+    context == "CHH" ~ "mCHH"
+  )) %>% 
+  filter(siren_type != "endo. siren") %>%
+   mutate(siren_type2 = case_when(
+    str_detect(siren_type, "all") ~ "all",
+    str_detect(siren_type, "ovary") ~ "ovary siren nearest",
+    str_detect(siren_type, "endo.") ~ "endo. siren nearest"
+  ))  %>%
+  rbind(gamete_siren_meta_long2 %>% 
+  filter(context == "CHH") %>% 
+  mutate(context1 = case_when(
+    context == "CG" ~ "mCG",
+    context == "CHG" ~ "mCHG",
+    context == "CHH" ~ "mCHH"
+  )) %>% 
+  filter(siren_type != "endo. siren") %>%
+  filter(str_detect(sample_ID, "sperm") == F) %>% 
+  mutate(siren_type2 = case_when(
+    str_detect(siren_type, "all") ~ "all",
+    str_detect(siren_type, "ovary") ~ "ovary siren nearest",
+    str_detect(siren_type, "endo.") ~ "endo. siren nearest"
+  )) %>% 
+  mutate(sample_type = case_when(
+    str_detect(sample_ID, "Park") ~ "egg\nPark et al",
+    T ~ sample_ID
+  ))) %>% 
+  ggplot(aes(x = bin.start, y = methylation), size = 2) +
+  geom_vline(data = axis_line, aes(xintercept = bin.start), size = 2) +
+  geom_hline(yintercept = -Inf, size = 2) +
+  geom_hline(yintercept = 0, color = NA) + 
+  facet_grid(sample_type ~ location, switch = "y", scales = "free")+
+  stat_summary(geom = "line", fun.y = mean, aes(group = siren_type, color = siren_type2), size = 1, alpha = 0.8) +
+  scale_x_continuous(breaks = c(-3000, -2000, -1000, 0, 1000, 2000, 3000), labels = NULL)+
+  #scale_y_continuous(breaks = c(0, 0.05, 0.1)) +
+  scale_linetype_manual(values = c(1, 3)) +
+  labs(x = NULL,
+       y = "mCHH",
+       color = NULL, 
+       linetype = NULL) +
+  guides(colour = guide_legend(ncol = 2)) +
+  scale_color_manual(values = c("black", "orangered3")) +
+  theme_minimal() +
+  theme(legend.position = "bottom", 
+        strip.placement = "outside", 
+        legend.box = "vertical", 
+        legend.spacing.y = unit(-0.5, "lines")) +
+  theme(panel.spacing.y = unit(1, "lines")) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x = element_text(colour="black")) +
+  theme(axis.text.y = element_text(colour="black"))  
+
+ggsave("all_vs_ovary_siren_meta_ov_egg.svg", width = 5, height = 5.5)
+ggsave("all_vs_ovary_siren_meta_ov_egg.png", width = 5, height = 5.5)
+```
+
+
+
+ 
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
