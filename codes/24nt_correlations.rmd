@@ -1,0 +1,913 @@
+---
+title: "50KB_window_cor"
+author: "Chenxin Li"
+date: "7/29/2020"
+output:
+  html_notebook:
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+  html_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(ggplot2)
+library(emmeans)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(readxl)
+library(stringr)
+library(RColorBrewer)
+library(svglite)
+library(ggdendro)
+```
+
+#data 
+##zygote wide 
+
+read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/50KB_windows/bams/zg1d_S49_L003_R1_001.fastq.gz.trimmed.dedup.fastq.gz.24.siRNAs.sam.bam.50KbWindows.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)
+    
+    
+```{r}
+siRNA_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/50KB_windows/bams", 
+                         pattern = "*.cov", full.names = T)
+
+zygote_counts <- sapply(siRNA_list, read_delim, delim = "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE, simplify = F)  %>% 
+  bind_rows(.id = "id")
+
+head(zygote_counts)
+```
+```{r}
+zygote_counts <- zygote_counts %>%
+  filter(str_detect(id, "SD7") == F) %>% 
+  mutate(sample_ID = substr(id, start = 90, stop = 93)) %>% 
+  select(X1, X4, X5, X9, sample_ID) 
+
+colnames(zygote_counts) <- c("Chr", "start", "end", "count", "sample_ID")
+head(zygote_counts)
+```
+
+```{r}
+wide <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_smRNA_revision/50KbWindows_24nt_siRNA_counts.txt", 
+    "\t", escape_double = FALSE, trim_ws = TRUE)
+```
+```{r}
+colnames(wide)
+```
+
+```{r}
+sample_des <- read_excel("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/sample_des_clvs12.xlsx") 
+
+smRNA_comp <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/codes_and_output/smRNA_comp.csv") 
+
+sample_des_lib <- sample_des %>% 
+  select(-library)%>% 
+  inner_join(smRNA_comp, by = "sample_ID") %>% 
+  arrange(sample_ID)
+
+sample_des_lib 
+```
+
+```{r}
+long <- wide %>% 
+  as.data.frame() %>% 
+  gather("library", "count", 9:29) %>% 
+  select(-X2, -X3, -X6, -X7, -X8) %>%
+  mutate(sample_ID = case_when(
+    str_detect(library, "sperm-1") ~ "BS1", #1
+    str_detect(library, "Sperm2") ~ "BS2",  #2
+    str_detect(library, "Sperm4a") ~ "BS4a",  #3
+    str_detect(library, "sperm4b") ~ "BS4b",  #4
+    str_detect(library, "sperm6a") ~ "BS6a",  #5
+    str_detect(library, "sperm6b") ~ "BS6b",  #6
+    str_detect(library, "sperm.5b") ~ "SP5b", #7
+    str_detect(library, "sperm.5c") ~ "SP5c", #8
+    str_detect(library, "Bulk.15") ~ "B15",   #9
+    str_detect(library, "Bulk.20") ~ "B20",   #10
+    str_detect(library, "Bulk.25") ~ "B25",   #11
+    str_detect(library, "seedling4") ~ "SD4", #12
+    str_detect(library, "egg.9a") ~ "E9a",    #13
+    str_detect(library, "egg.9b") ~ "E9b",    #14
+    str_detect(library, "egg.9c") ~ "E9c",    #15
+    str_detect(library, "eggcell4") ~ "E4",   #16
+    str_detect(library, "eggcell3") ~ "E3",   #17
+    str_detect(library, "eggcell2") ~ "E2",   #18
+    str_detect(library, "ovary.no.egg.1a") ~ "OV1a",    #19
+    str_detect(library, "ovary.no.egg.1b") ~ "OV1b",    #20
+    str_detect(library, "Ovarynoegg2") ~ "OV2",         #21
+    str_detect(library, "SRR57") ~ "root",              #22
+    str_detect(library, "ab_control") ~ "ddm1_con",     #23
+    str_detect(library, "ddm1ab") ~ "ddm1",             #24
+    str_detect(library, "drm2-T-DNA_control") ~ "drm2_con",  #25 drm2-T-DNA_control.fastq
+    str_detect(library, "drm2-T-DNA.fas") ~ "drm2",          #26   
+    str_detect(library, "SRR2544786") ~ "em_dry", #27  
+    str_detect(library, "SRR5049778") ~ "an_pre",  #28
+    str_detect(library, "SRR5049779") ~ "an_mei",  #29
+    str_detect(library, "SRR5049780") ~ "an_mic",  #30
+    str_detect(library, "SRR5049781") ~ "an_bi",   #31
+    str_detect(library, "SRR5049786") ~ "ov_1st",  #32
+    str_detect(library, "SRR5049787") ~ "ov_2nd",  #33
+    str_detect(library, "SRR5049788") ~ "ov_3rd",  #34
+    str_detect(library, "SRR5049789") ~ "ov_4th",  #35
+    str_detect(library, "S3_1") ~ "S3_1",          #36
+    str_detect(library, "S3_2") ~ "S3_2",          #37
+    str_detect(library, "S3_3") ~ "S3_3",          #38
+    str_detect(library, "S5_1") ~ "S5_1",          #39
+    str_detect(library, "S5_2") ~ "S5_2",          #40
+    str_detect(library, "S5_3") ~ "S5_3",          #41
+    str_detect(library, "S7_1") ~ "S7_1",          #42
+    str_detect(library, "S7_2") ~ "S7_2",          #43
+    str_detect(library, "S7_3") ~ "S7_3",          #44
+    str_detect(library, "SRR2544787") ~ "em_12h",  #45
+    str_detect(library, "SRR2544788") ~ "em_24h",  #46
+    str_detect(library, "SRR771501") ~ "em_7DAF",  #47
+    str_detect(library, "SRR771500") ~ "en_7DAF"   #48
+  )) %>% 
+  inner_join(sample_des%>% 
+               select(-library), by = "sample_ID") %>% 
+  inner_join(smRNA_comp , by ="sample_ID" ) %>%
+  mutate(RPM = count / `general siRNA` * 10^6) 
+
+head(long)
+```
+```{r}
+long_zygote <- zygote_counts %>% 
+  inner_join(sample_des%>% 
+               select(-library), by = "sample_ID") %>% 
+  inner_join(smRNA_comp , by ="sample_ID" ) %>%
+  mutate(RPM = count / `general siRNA` * 10^6) 
+
+head(long_zygote)
+```
+
+
+```{r}
+long_egg <- long %>% 
+  filter(sample_type == "egg")
+
+long_sperm <- long %>% 
+  filter(sample_type == "sperm")
+
+long_sd <- long %>% 
+  filter(sample_type == "seedling shoot")
+
+long_ov <- long %>% 
+  filter(sample_type == "ovary")
+```
+
+#egg
+```{r}
+wide_egg <- long_egg %>% 
+  as.data.frame() %>% 
+  select(RPM, sample_ID, X1, X4 ,X5) %>%
+  mutate(tag = paste(X1, X4, X5, sep = "-")) %>% 
+  select(-X1, -X4, -X5) %>% 
+  spread(sample_ID, RPM)
+
+head(wide_egg)
+```
+```{r}
+cor_mat_egg <- cor(wide_egg[, 2:7])
+cor_mat_egg
+```
+```{r}
+cor_df_egg <- cor_mat_egg %>% 
+  as.data.frame() %>% 
+  mutate(sample_1 = row.names(cor_mat_egg)) %>% 
+  gather("sample_2", cor, 1:6)
+
+cor_df_egg
+```
+```{r}
+##make a gradient
+order_cor_egg <- cor_df_egg %>% 
+  filter(sample_2 == "E2") %>% 
+  arrange(cor) %>% 
+  mutate(Order = order(cor)) %>% 
+  select(sample_1, Order) 
+
+order_cor_egg
+```
+```{r}
+order_cor_egg %>% 
+  inner_join(cor_df_egg, by = "sample_1") %>% 
+  inner_join(order_cor_egg, by = c("sample_2" = "sample_1")) %>% 
+  mutate(d = (Order.x + 0.05)^2 + (Order.y + 0.05)^2) %>% 
+  distinct(d, .keep_all = T) %>% 
+  ggplot(aes(x = reorder(sample_1, Order.x), y = reorder(sample_2, Order.y))) +
+  geom_tile(aes(fill = cor), alpha = 0.9) +
+  geom_text(aes(label = cor %>% round(2)), size = 5, fontface = "bold") +
+  scale_fill_gradientn(colours = rev(brewer.pal(11, "Spectral")[1:6]), na.value = NA) +
+  scale_x_discrete(labels = c("rep1", "rep2", "rep3", "rep4", "rep5", "rep6")) +
+  scale_y_discrete(labels = c("rep1", "rep2", "rep3", "rep4", "rep5", "rep6")) +
+  labs(x = NULL, 
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = c(.85, .4)) +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black", angle = 45, hjust = 1)) +
+  theme(axis.text.y=element_text(colour = "black")) +
+  theme(panel.grid = element_blank()) 
+
+ggsave(filename = "cor_heatmap_egg.svg", width = 3.75, height = 3.75)
+ggsave(filename = "cor_heatmap_egg.png", width = 3.75, height = 3.75)
+```
+```{r}
+wide_egg %>% 
+  ggplot(aes(x = E2, y = E3)) +
+  geom_smooth(method = "lm", se = F, color = "black", linetype = 2) +
+  geom_point(shape = 21, color = "white", size = 2, fill = "tomato1", alpha = 0.8) +
+  labs(x = "egg rep1",
+       y = "egg rep2") +
+  theme_classic() +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+```
+
+#sperm
+```{r}
+wide_sperm <- long_sperm %>% 
+  as.data.frame() %>% 
+  select(RPM, sample_ID, X1, X4 ,X5) %>%
+  mutate(tag = paste(X1, X4, X5, sep = "-")) %>% 
+  select(-X1, -X4, -X5) %>% 
+  spread(sample_ID, RPM)
+
+head(wide_sperm)
+```
+```{r}
+cor_mat_sperm <- cor(wide_sperm[, 2:9])
+cor_mat_sperm
+```
+```{r}
+cor_df_sperm <- cor_mat_sperm %>% 
+  as.data.frame() %>% 
+  mutate(sample_1 = row.names(cor_mat_sperm)) %>% 
+  gather("sample_2", cor, 1:8)
+
+cor_df_sperm
+```
+```{r}
+##make a gradient
+order_cor_sperm <- cor_df_sperm %>% 
+  filter(sample_2 == "BS1") %>% 
+  arrange(cor) %>% 
+  mutate(Order = order(cor)) %>% 
+  select(sample_1, Order) 
+
+order_cor_sperm
+```
+```{r}
+order_cor_sperm %>% 
+  inner_join(cor_df_sperm, by = "sample_1") %>% 
+  inner_join(order_cor_sperm, by = c("sample_2" = "sample_1")) %>% 
+  mutate(d = (Order.x + 0.05)^2 + (Order.y + 0.05)^2) %>% 
+  distinct(d, .keep_all = T) %>% 
+  ggplot(aes(x = reorder(sample_1, Order.x), y = reorder(sample_2, Order.y))) +
+  geom_tile(aes(fill = cor), alpha = 0.9) +
+  geom_text(aes(label = cor %>% round(2)), size = 5, fontface = "bold") +
+  scale_fill_gradientn(colours = rev(brewer.pal(11, "Spectral")[1:6]), na.value = NA) +
+  scale_x_discrete(labels = c("rep1", "rep2", "rep3", "rep4", "rep5", "rep6", "rep7", "rep8")) +
+  scale_y_discrete(labels = c("rep1", "rep2", "rep3", "rep4", "rep5", "rep6", "rep7", "rep8")) +
+  labs(x = NULL, 
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = c(.85, .4)) +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black", angle = 45, hjust = 1)) +
+  theme(axis.text.y=element_text(colour = "black")) +
+  theme(panel.grid = element_blank()) 
+
+ggsave(filename = "cor_heatmap_sperm.svg", width = 4.8, height = 4.8)
+ggsave(filename = "cor_heatmap_sperm.png", width = 4.8, height = 4.8)
+```
+```{r}
+wide_sperm %>% 
+  ggplot(aes(x = SP5b, y = SP5c)) +
+  geom_smooth(method = "lm", se = F, color = "black", linetype = 2) +
+  geom_point(shape = 21, color = "white", size = 2, fill = "dodgerblue2", alpha = 0.8) +
+  labs(x = "sperm rep1",
+       y = "sperm rep2") +
+  theme_classic() +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+```
+#seedling
+```{r}
+wide_seedling <- long_sd %>% 
+  as.data.frame() %>% 
+  select(RPM, sample_ID, X1, X4 ,X5) %>%
+  mutate(tag = paste(X1, X4, X5, sep = "-")) %>% 
+  select(-X1, -X4, -X5) %>% 
+  spread(sample_ID, RPM)
+
+head(wide_seedling)
+```
+```{r}
+cor_mat_seedling <- cor(wide_seedling[, 2:5])
+cor_mat_seedling
+```
+```{r}
+cor_df_seedling <- cor_mat_seedling %>% 
+  as.data.frame() %>% 
+  mutate(sample_1 = row.names(cor_mat_seedling)) %>% 
+  gather("sample_2", cor, 1:4)
+
+cor_df_seedling
+```
+```{r}
+##make a gradient
+order_cor_seedling <- cor_df_seedling %>% 
+  filter(sample_2 == "B15") %>% 
+  arrange(cor) %>% 
+  mutate(Order = order(cor)) %>% 
+  select(sample_1, Order) 
+
+order_cor_seedling
+```
+```{r}
+order_cor_seedling %>% 
+  inner_join(cor_df_seedling, by = "sample_1") %>% 
+  inner_join(order_cor_seedling, by = c("sample_2" = "sample_1")) %>% 
+  mutate(d = (Order.x + 0.05)^2 + (Order.y + 0.05)^2) %>% 
+  distinct(d, .keep_all = T) %>% 
+  ggplot(aes(x = reorder(sample_1, Order.x), y = reorder(sample_2, Order.y))) +
+  geom_tile(aes(fill = cor), alpha = 0.9) +
+  geom_text(aes(label = cor %>% round(2)), size = 5, fontface = "bold") +
+  scale_fill_gradientn(colours = rev(brewer.pal(11, "Spectral")[1:6]), na.value = NA, breaks = c(0.9, 0.95, 1)) +
+  scale_x_discrete(labels = c("rep1", "rep2", "rep3", "rep4")) +
+  scale_y_discrete(labels = c("rep1", "rep2", "rep3", "rep4")) +
+  labs(x = NULL, 
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  theme(legend.key.height = unit(1, "lines")) +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black", angle = 45, hjust = 1)) +
+  theme(axis.text.y=element_text(colour = "black")) +
+  theme(panel.grid = element_blank()) 
+
+ggsave("cor_heatmap_seedling.svg", height = 3, width = 4)
+ggsave("cor_heatmap_seedling.png", height = 3, width = 4)
+```
+```{r}
+wide_seedling %>% 
+  ggplot(aes(x = B15, y = B20)) +
+  geom_smooth(method = "lm", se = F, color = "black", linetype = 2) +
+  geom_point(shape = 21, color = "white", size = 2, fill = "seagreen", alpha = 0.8) +
+  labs(x = "seedling rep1",
+       y = "seedling rep2") +
+  theme_classic() +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+```
+#ovary
+```{r}
+wide_ov <- long_ov %>% 
+  as.data.frame() %>% 
+  select(RPM, sample_ID, X1, X4 ,X5) %>%
+  mutate(tag = paste(X1, X4, X5, sep = "-")) %>% 
+  select(-X1, -X4, -X5) %>% 
+  spread(sample_ID, RPM)
+
+head(wide_ov)
+```
+```{r}
+cor_mat_ov <- cor(wide_ov[, 2:4])
+cor_mat_ov
+```
+```{r}
+cor_df_ov <- cor_mat_ov %>% 
+  as.data.frame() %>% 
+  mutate(sample_1 = row.names(cor_mat_ov)) %>% 
+  gather("sample_2", cor, 1:3)
+
+cor_df_ov
+```
+```{r}
+order_cor_ov <- cor_df_ov %>% 
+  filter(sample_2 == "OV1a") %>% 
+  arrange(cor) %>% 
+  mutate(Order = order(cor)) %>% 
+  select(sample_1, Order) 
+
+order_cor_ov
+```
+
+```{r}
+order_cor_ov %>% 
+  inner_join(cor_df_ov, by = "sample_1") %>% 
+  inner_join(order_cor_ov, by = c("sample_2" = "sample_1")) %>% 
+  mutate(d = (Order.x + 0.05)^2 + (Order.y + 0.05)^2) %>% 
+  distinct(d, .keep_all = T) %>% 
+  ggplot(aes(x = reorder(sample_1, Order.x), y = reorder(sample_2, Order.y))) +
+  geom_tile(aes(fill = cor), alpha = 0.9) +
+  geom_text(aes(label = cor %>% round(2)), size = 5, fontface = "bold") +
+  scale_fill_gradientn(colours = rev(brewer.pal(11, "Spectral")[1:3]), na.value = NA, breaks = c(0.995, 1)) +
+  scale_x_discrete(labels = c("rep1", "rep2", "rep3")) +
+  scale_y_discrete(labels = c("rep1", "rep2", "rep3")) +
+  labs(x = NULL, 
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black", angle = 45, hjust = 1)) +
+  theme(axis.text.y=element_text(colour = "black")) +
+  theme(panel.grid = element_blank()) 
+
+ggsave("cor_heatmap_ov.svg", height = 2.7, width = 3.8)
+ggsave("cor_heatmap_ov.png", height = 2.7, width = 3.8)
+```
+
+#zygote
+```{r}
+wide_zygote <- long_zygote %>% 
+  as.data.frame() %>% 
+  select(RPM, sample_ID, Chr, start, end) %>%
+  mutate(tag = paste(Chr, start, end, sep = "-")) %>% 
+  select(-Chr, -start, -end) %>% 
+  spread(sample_ID, RPM)
+
+head(wide_zygote)
+```
+```{r}
+cor_mat_zygote <- cor(wide_zygote[, 2:7])
+cor_mat_zygote
+```
+```{r}
+cor_df_zygote <- cor_mat_zygote %>% 
+  as.data.frame() %>% 
+  mutate(sample_1 = row.names(cor_mat_zygote)) %>% 
+  gather("sample_2", cor, 1:6)
+
+cor_df_zygote
+```
+
+```{r}
+order_cor_zygote <- cor_df_zygote %>% 
+  filter(sample_2 == "zg1d") %>% 
+  arrange(cor) %>% 
+  mutate(Order = order(cor)) %>% 
+  select(sample_1, Order) 
+
+order_cor_zygote
+```
+```{r}
+order_cor_zygote %>% 
+  inner_join(cor_df_zygote, by = "sample_1") %>% 
+  inner_join(order_cor_zygote, by = c("sample_2" = "sample_1")) %>% 
+  mutate(d = (Order.x + 0.05)^2 + (Order.y + 0.05)^2) %>% 
+  distinct(d, .keep_all = T) %>% 
+  ggplot(aes(x = reorder(sample_1, Order.x), y = reorder(sample_2, Order.y))) +
+  geom_tile(aes(fill = cor), alpha = 0.9) +
+  geom_text(aes(label = cor %>% round(3)), size = 4, fontface = "bold") +
+  scale_fill_gradientn(colours = rev(brewer.pal(11, "Spectral")[1:5]), na.value = NA) +
+  scale_x_discrete(labels = c("rep1", "rep2", "rep3", "rep4", "rep5", "rep6")) +
+  scale_y_discrete(labels = c("rep1", "rep2", "rep3", "rep4", "rep5", "rep6")) +
+  labs(x = NULL, 
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = c(.85, .4)) +
+  theme(text = element_text(size= 14, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black", angle = 45, hjust = 1)) +
+  theme(axis.text.y=element_text(colour = "black")) +
+  theme(panel.grid = element_blank()) 
+
+ggsave(filename = "cor_heatmap_zy.svg", width = 3.75, height = 3.75)
+ggsave(filename = "cor_heatmap_zy.png", width = 3.75, height = 3.75)
+```
+```{r}
+wide_zygote %>% 
+  ggplot(aes(x = zg1d, y = zg1e)) +
+  geom_smooth(method = "lm", se = F, color = "black", linetype = 2) +
+  geom_point(shape = 21, color = "white", size = 2, fill = "violetred2", alpha = 0.8) +
+  labs(x = "zygote rep1",
+       y = "zygote rep2") +
+  theme_classic() +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+```
+
+#PCA
+```{r}
+head(long_zygote)
+
+long_zygote <- long_zygote %>% 
+  mutate(logRPM = log10(RPM + 1))
+
+zygote_wide <- long_zygote %>% 
+  mutate(tag = paste(Chr, ":", start, "-", end, sep = "")) %>% 
+  select(logRPM, sample_ID, tag) %>% 
+  spread(sample_ID, logRPM)
+
+head(zygote_wide)
+```
+
+```{r}
+head(long)
+
+RPM_wide <- long %>% 
+  mutate(tag = paste(X1, ":", X4, "-", X5, sep = "")) %>% 
+  mutate(logRPM = log10(RPM + 1)) %>% 
+  select(logRPM, sample_ID, tag) %>% 
+  spread(sample_ID, logRPM) %>% 
+  full_join(zygote_wide, by = "tag")
+
+head(RPM_wide)
+```
+
+```{r}
+pc <- prcomp(t(RPM_wide[, -1]))
+pc_importance <- as.data.frame(t(summary(pc)$importance))
+pc_importance 
+```
+ 
+
+```{r}
+pc$x %>% 
+  as.data.frame() %>% 
+  mutate(sample_ID = row.names(.)) %>% 
+  inner_join(sample_des, by = "sample_ID") %>% 
+  mutate(sample_type1 = case_when(
+    sample_type == "seedling shoot" ~ "seedling",
+    sample_type != "seedling shoot" ~ sample_type
+  )) %>% 
+  filter(sample_type != "ovary") %>% 
+  ggplot(aes(x = PC1, y = PC2)) +
+  geom_point(aes(color = sample_type1), size = 3, alpha = 0.8) +
+  scale_color_manual(values = c("tomato1", "seagreen", "dodgerblue2", "violetred2"),
+                   limits = c("egg", "seedling", "sperm", "zygote")) + 
+  labs(x = paste("PC1 (", pc_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
+       y = paste("PC2 (", pc_importance[2, 2] %>% signif(3)*100, "% of Variance)", "  ", sep = ""),
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = F) +
+  theme_bw() + 
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black")) 
+
+ggsave(filename = "50kb_PCA.svg", width = 5.5, height = 4.5)
+ggsave(filename = "50kb_PCA.png", width = 5.5, height = 4.5)
+```
+```{r}
+pc$x %>% 
+  as.data.frame() %>% 
+  mutate(sample_ID = row.names(.)) %>% 
+  inner_join(sample_des, by = "sample_ID") %>% 
+  mutate(sample_type1 = case_when(
+    sample_type == "seedling shoot" ~ "seedling\nshoot",
+    sample_type != "seedling shoot" ~ sample_type
+  )) %>% 
+  filter(sample_type != "ovary") %>% 
+  ggplot(aes(x = PC1, y = PC2)) +
+  geom_point(aes(color = sample_type1), size = 3, alpha = 0.8) +
+  geom_label(aes(label = sample_ID)) +
+  scale_color_manual(values = c("tomato1", "seagreen", "dodgerblue2", "violetred2"),
+                   limits = c("egg", "seedling\nshoot", "sperm", "zygote")) + 
+  labs(x = paste("PC1 (", pc_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
+       y = paste("PC2 (", pc_importance[2, 2] %>% signif(3)*100, "% of Variance)", "  ", sep = ""),
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = F) +
+  theme_bw() + 
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+```
+
+#scatter 
+```{r}
+long_egg_mean <- long_egg %>%
+  mutate(tag = paste(X1, ":", X4, "-", X5, sep = "")) %>% 
+  mutate(logRPM = log10(RPM + 1)) %>% 
+  group_by(tag) %>% 
+  summarise(mean.RPM = mean(RPM), 
+            mean.logRPM = mean(logRPM), 
+            sd.RPM = sd(RPM),
+            sd.logRPM = sd(logRPM),
+            n = n()) %>% 
+  mutate(se.RPM = sd.RPM/sqrt(n)) %>% 
+  mutate(se.logRPM = sd.logRPM/sqrt(n)) 
+
+head(long_egg_mean)
+```
+
+```{r}
+long_zyg_mean <- long_zygote %>%
+  mutate(tag = paste(Chr, ":", start, "-", end, sep = "")) %>% 
+  mutate(logRPM = log10(RPM + 1)) %>% 
+  group_by(tag) %>% 
+  summarise(mean.RPM = mean(RPM), 
+            mean.logRPM = mean(logRPM), 
+            sd.RPM = sd(RPM),
+            sd.logRPM = sd(logRPM),
+            n = n()) %>% 
+  mutate(se.RPM = sd.RPM/sqrt(n)) %>% 
+  mutate(se.logRPM = sd.logRPM/sqrt(n)) 
+
+head(long_zyg_mean)
+```
+
+```{r}
+egg_zyg <- long_egg_mean %>% 
+  full_join(long_zyg_mean, by = "tag")
+
+head(egg_zyg)
+```
+
+##cor test
+```{r}
+cor.test(egg_zyg$mean.RPM.x, egg_zyg$mean.RPM.y)
+cor_ze <- cor.test(egg_zyg$mean.RPM.x, egg_zyg$mean.RPM.y) 
+cor_ze$p.value
+cor_ze$estimate
+```
+
+```{r}
+egg_zyg %>% 
+  filter(mean.RPM.x < quantile(mean.RPM.x, 0.9999)) %>% 
+  filter(mean.RPM.y < quantile(mean.RPM.y, 0.9999)) %>% 
+  ggplot(aes(x = mean.RPM.x, y = mean.RPM.y)) +
+  geom_point(alpha = 0.8) +
+  geom_smooth(method = "lm") +
+  annotate(geom = "text", label = paste("r = ", round(cor_ze$estimate, 2), "\n",
+                                        "P = ", round(cor_ze$p.value, 2), sep = ""), 
+           size = 5, fontface = "bold.italic", x = -Inf, y = Inf, hjust = -0.2, vjust = 1.2) +
+  scale_x_continuous(breaks = c(0, 2000, 4000, 6000)) + 
+  scale_y_continuous(breaks = c(0, 2000, 4000, 6000)) + 
+  labs(x = "siRNA in egg cell (RPM)",
+       y = "siRNA in zygote (RPM)")
+
+ggsave("zy_vs.egg.svg", width = 5, height = 5)
+ggsave("zy_vs.egg.png", width = 5, height = 5)
+```
+
+
+#siRNA loci and gene density
+##data
+```{r}
+gene.density <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/50KB_windows/MSU7_filtered_genes_50Kb.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE) 
+
+head(gene.density)
+```
+
+```{r}
+loci_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/50KB_windows/beds", 
+                         pattern = "*.cov", full.names = T)
+
+loci_counts <- sapply(loci_list, read_delim, delim = "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE, simplify = F)  %>% 
+  bind_rows(.id = "id")
+
+head(loci_counts)
+```
+
+```{r}
+MSU7_filtered_genes <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/MSU7_filtered_genes.gff", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE) 
+
+total_genes <- MSU7_filtered_genes %>% nrow()
+```
+```{r}
+seedling_siRNA_loci <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/loci_bed_files/seedling_siRNA_loci.bed", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE) 
+
+total_seedling_loci <- seedling_siRNA_loci %>% nrow()
+```
+
+```{r}
+bed.list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/gamete_zygote_siRNA_loci", 
+                         pattern = "*.bed", full.names = T)
+
+bed_counts <- sapply(bed.list, read_delim, delim = "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE, simplify = F)  %>% 
+  bind_rows(.id = "id") %>% 
+  group_by(id) %>% 
+  count() %>% 
+  ungroup()
+
+head(bed_counts)
+```
+```{r}
+bed_counts_clean <- bed_counts %>% 
+  mutate(locus = case_when(
+    str_detect(id, "egg-sperm_intersect") ~ "egg/sperm intersect",
+    str_detect(id, "seedling_siRNA_loci") ~ "seedling siRNA loci",
+    str_detect(id, "zygote-egg_compl") ~ "zygote de novo loci",
+    str_detect(id, "zygote-egg_intersect") ~ "zygote/egg intersect",
+    str_detect(id, "zygote-gam") ~ "zygote not gamete",
+    str_detect(id, "zygote-seedling_intersect") ~ "zygote/seedling intersect",
+    str_detect(id, "zygote-seedling_compl") ~ "zygote/seedling complement",
+    str_detect(id, "zygote-sperm_intersect") ~ "zygote/sperm intersect",
+    str_detect(id, "zygote-sperm_compl") ~ "zygote/sperm complement"
+  )) %>% 
+  select(-id) %>% 
+  rbind(
+    data.frame(
+      locus = c("seedling siRNA loci", "genes"),
+      n = c(total_seedling_loci, total_genes)
+    )
+  )
+
+bed_counts_clean
+```
+
+
+```{r}
+loci_genes_counts <- loci_counts %>% 
+    mutate(locus = case_when(
+    str_detect(id, "egg-sperm_intersect") ~ "egg/sperm intersect",
+    str_detect(id, "seedling_siRNA_loci") ~ "seedling siRNA loci",
+    str_detect(id, "zygote-egg_compl") ~ "zygote de novo loci",
+    str_detect(id, "zygote-egg_intersect") ~ "zygote/egg intersect",
+    str_detect(id, "zygote-gam") ~ "zygote not gamete",
+    str_detect(id, "zygote-seedling_intersect") ~ "zygote/seedling intersect",
+    str_detect(id, "zygote-seedling_compl") ~ "zygote/seedling complement",
+    str_detect(id, "zygote-sperm_intersect") ~ "zygote/sperm intersect",
+    str_detect(id, "zygote-sperm_compl") ~ "zygote/sperm complement"
+  )) %>% 
+  select(-id) %>% 
+  rbind(gene.density %>% 
+          mutate(locus = "genes")) %>% 
+  inner_join(bed_counts_clean, by = "locus") %>% 
+  mutate(pro = X9/n)
+
+head(loci_genes_counts)
+```
+##cor 
+```{r}
+loci_genes_counts_wide <- loci_genes_counts %>% 
+  filter(locus == "genes" |
+           locus == "seedling siRNA loci" |
+           locus == "zygote de novo loci" |
+           locus == "zygote/egg intersect" |
+           locus == "zygote/sperm intersect" |
+           locus == "egg/sperm intersect" ) %>% 
+  mutate(tag = paste(X1, ":", X4, "-", X5, sep = "")) %>% 
+  select(tag, locus, pro) %>% 
+  spread(locus, pro)
+
+head(loci_genes_counts_wide)
+```
+```{r}
+cor_mat_bed <- cor(loci_genes_counts_wide[, -1])
+cor_mat_bed
+```
+
+```{r}
+cor_df_bed <- cor_mat_bed %>% 
+  as.data.frame() %>% 
+  mutate(sample_1 = row.names(cor_mat_bed)) %>% 
+  gather("sample_2", cor, 1:6) 
+
+cor_df_bed
+```
+```{r}
+order_cor_bed <- cor_df_bed %>% 
+  filter(sample_2 == "genes") %>% 
+  arrange(cor) %>% 
+  mutate(Order = order(-cor)) %>% 
+  select(sample_1, Order) 
+
+order_cor_bed
+```
+
+```{r}
+order_cor_bed %>% 
+  inner_join(cor_df_bed, by = "sample_1") %>% 
+  inner_join(order_cor_bed, by = c("sample_2" = "sample_1")) %>% 
+  mutate(d = (Order.x + 0.05)^2 + (Order.y + 0.05)^2) %>% 
+  distinct(d, .keep_all = T) %>% 
+  ggplot(aes(x = reorder(sample_1, Order.x), y = reorder(sample_2, Order.y))) +
+  geom_tile(aes(fill = cor), alpha = 0.9) +
+  geom_text(aes(label = cor %>% round(2)), size = 4, fontface = "bold") +
+  scale_fill_gradientn(colours = rev(brewer.pal(11, "Spectral")[1:5]), na.value = NA, breaks = c(0, 0.5, 1)) +
+  #scale_x_discrete(labels = c("rep1", "rep2", "rep3", "rep4", "rep5", "rep6")) +
+  #scale_y_discrete(labels = c("rep1", "rep2", "rep3", "rep4", "rep5", "rep6")) +
+  labs(x = NULL, 
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = c(.85, .4)) +
+  theme(text = element_text(size= 14, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black", angle = 45, hjust = 1)) +
+  theme(axis.text.y=element_text(colour = "black")) +
+  theme(panel.grid = element_blank()) +
+  coord_flip()
+```
+
+
+```{r}
+cor.test(loci_genes_counts_wide$`zygote de novo loci`, loci_genes_counts_wide$`seedling siRNA loci`)
+cor.test(loci_genes_counts_wide$`egg/sperm intersect`, loci_genes_counts_wide$`seedling siRNA loci`)$p.value
+```
+##plot
+```{r}
+loci_genes_counts_wide %>% 
+  ggplot(aes(x = `genes`, y = `seedling siRNA loci`)) +
+  geom_jitter() +
+  geom_smooth(method = "lm")
+```
+```{r}
+loci_genes_counts_wide %>% 
+  ggplot(aes(y = `zygote de novo loci`, x = `seedling siRNA loci`)) +
+  geom_jitter() +
+  geom_smooth(method = "lm")
+```
+```{r}
+loci_genes_counts_wide %>% 
+  ggplot(aes(y = `seedling siRNA loci`, x = `zygote/sperm intersect`)) +
+  geom_jitter() +
+  geom_smooth(method = "lm")
+```
+ 
+##tree
+```{r}
+all.dist <- dist(loci_genes_counts_wide[,-1] %>% t(), method = "e")
+all.hc <- hclust(all.dist, method = "complete")
+plot(all.hc)
+```
+```{r}
+dend_data <- dendro_data(all.hc, type = "rectangle")
+tip <- dend_data$labels  
+
+tip
+```
+```{r}
+tip %>% 
+  ggplot(aes(x = x, y = -y)) +
+  geom_segment(data = dend_data$segments, aes(x = x, y = -y, xend = xend, yend = -yend), 
+               size = 2, lineend = "round", alpha = 0.8) +
+  geom_text(aes(label = label), size = 5, hjust = -0.08,
+            fontface = "bold") +
+  scale_x_continuous(labels = NULL) +
+  scale_y_continuous(limits = c(-0.02, 0.08), breaks = c(0, 0.02), labels = NULL) + 
+  labs(x = NULL,
+       y = NULL,
+       fill = NULL) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black")) +
+  theme(panel.grid = element_blank()) +
+  coord_flip()
+
+ggsave("dendro.svg", height = 4, width = 4.5)
+ggsave("dendro.png", height = 4, width = 4.5)
+```
+
+
+
+##PCA
+```{r}
+pc_bed <- prcomp(t(loci_genes_counts_wide[, -1]))
+pc_bed_importance <- as.data.frame(t(summary(pc)$importance))
+pc_bed_importance 
+```
+```{r}
+pc_bed$x %>% 
+  as.data.frame() %>% 
+  mutate(locus_type = row.names(.)) %>% 
+  ggplot(aes(x = PC1, y = PC2)) +
+  geom_point(aes(color = locus_type), size = 3, alpha = 0.8) +
+  scale_color_manual(values = c("grey20", "seagreen", "violetred2", "violetred4",
+                                "tomato1", "dodgerblue4", "slateblue"),
+                     limits = c("genes", "seedling siRNA loci", "zygote de novo loci", "zygote/gamete complement",
+                                "zygote/egg intersect", "zygote/sperm intersect", "egg/sperm intersect")) +
+  labs(x = paste("PC1 (", pc_bed_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
+       y = paste("PC2 (", pc_bed_importance[2, 2] %>% signif(3)*100, "% of Variance)", "  ", sep = ""),
+       fill = NULL,
+       color = NULL) +  
+  #guides(color = guide_legend(ncol = 2)) +
+  theme_bw() + 
+  #theme(legend.position = "bottom") +
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black")) 
+
+ggsave(filename = "loci_bed_PCA.svg", width = 8, height = 5)
+ggsave(filename = "loci_bed_PCA.png", width = 8, height = 5)
+```
+
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

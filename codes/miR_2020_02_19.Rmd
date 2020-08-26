@@ -1,0 +1,1221 @@
+---
+title: "miR"
+author: "Chenxin Li"
+date: "Feb 19, 2020"
+output:
+  html_notebook:
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+  html_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(edgeR)
+library(ggplot2)
+library(emmeans)
+library(tidyr)
+library(dplyr)
+library(readr)
+library(readxl)
+library(vegan)
+library(dynamicTreeCut)
+library(RColorBrewer)
+library(stringr)
+library(svglite)
+library(ggdendro)
+library(ggalluvial)
+library(cowplot)
+```
+
+
+#load data
+```{r}
+sample_des <- read_excel("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/sample_des_clvs12.xlsx") 
+
+sample_des
+
+smRNA_comp <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/codes_and_output/smRNA_comp.csv")  
+
+sample_des_lib <- sample_des %>% 
+  select(-library)%>% 
+  inner_join(smRNA_comp, by = "sample_ID") %>% 
+  arrange(sample_ID)
+
+sample_des_lib 
+```
+```{r}
+#counts from gametes
+miR_CLVS11 <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS11/miR_cts.csv")
+```
+```{r}
+miR_CLVS8 <- miR_CLVS11 %>% 
+  select(-SD5, -zg1c, -zg2c)
+```
+
+```{r}
+#load CLVS12 
+SD7 <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/zygote_siRNAs/mir_cov/SD7_S55_L003_R1_001.fastq.gz.trimmed.dedup.fastq.gz.miR.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)
+
+zg1d <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/zygote_siRNAs/mir_cov/zg1d_S49_L003_R1_001.fastq.gz.trimmed.dedup.fastq.gz.miR.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)
+
+zg1e <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/zygote_siRNAs/mir_cov/zg1e_S51_L003_R1_001.fastq.gz.trimmed.dedup.fastq.gz.miR.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)
+
+zg2d <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/zygote_siRNAs/mir_cov/zg2d_S50_L003_R1_001.fastq.gz.trimmed.dedup.fastq.gz.miR.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)
+
+zg2e <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/zygote_siRNAs/mir_cov/zg2e_S52_L003_R1_001.fastq.gz.trimmed.dedup.fastq.gz.miR.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)
+
+zg3a <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/zygote_siRNAs/mir_cov/zg3a_S53_L003_R1_001.fastq.gz.trimmed.dedup.fastq.gz.miR.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)
+
+zg3b <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/zygote_siRNAs/mir_cov/zg3b_S54_L003_R1_001.fastq.gz.trimmed.dedup.fastq.gz.miR.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)
+```
+
+```{r}
+head(SD7)
+```
+
+
+
+
+#data arrangement
+```{r}
+cts_clvs12 <- SD7[, 9:10] %>% 
+  full_join(zg1d[, 9:10], by = "X9") %>% 
+  full_join(zg1e[, 9:10], by = "X9") %>% 
+  full_join(zg2d[, 9:10], by = "X9") %>% 
+  full_join(zg2e[, 9:10], by = "X9") %>% 
+  full_join(zg3a[, 9:10], by = "X9") %>% 
+  full_join(zg3a[, 9:10], by = "X9") %>%
+  separate(X9, c("A", "B", "C", "D"), sep = ";", remove = T) %>% 
+  dplyr::select(-A, -B, -D) %>% 
+  separate(C, c("C1", "miR"), remove = T, sep = "=") %>% 
+  dplyr::select(-C1)
+
+colnames(cts_clvs12)[2:ncol(cts_clvs12)] <- c(
+  "SD7", "zg1d", "zg1e", "zg2d", "zg2e", "zg3a", "zg3b"
+  )
+
+head(cts_clvs12)
+write_excel_csv(cts_clvs12, "miR_cts_clvs12.csv") 
+```
+
+```{r}
+cts <- miR_CLVS8 %>% 
+  full_join(cts_clvs12, by = "miR")
+
+head(cts)
+write_excel_csv(cts, "miR_cts.csv")
+```
+
+##miR of same sequence? 
+```{r}
+osa_mirBase22 <- read.delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/miRNA/osa_mirBase22.txt", header=FALSE) 
+
+osa_mir <- osa_mirBase22[, 1:2]
+colnames(osa_mir) <- c("tag", "sequence") 
+osa_mir <- osa_mir%>% 
+  separate(tag, c("T1", "T2", "T3", "T4", "T5"), sep = " ", remove = T) %>% 
+  mutate(miR = paste("osa", T5, sep = "-")) %>% 
+  select(-T1, -T3, -T4, -T5) %>% 
+  arrange(T2)
+
+osa_mir <- osa_mir[osa_mir$miR %in% cts$miR, ]
+head(osa_mir, 10)
+```
+```{r}
+osa_mir_unique <- distinct(osa_mir, sequence, .keep_all = T)
+osa_mir_dup <- anti_join(osa_mir, osa_mir_unique, by = c("miR", "sequence"))
+dim(osa_mir_unique)
+
+head(osa_mir_unique, 10)
+
+write.csv(osa_mir, "osa_mir_seq.csv")
+write.csv(osa_mir_dup, "osa_mir_seq_duplicated.csv")
+```
+
+```{r}
+cts_seq <- cts %>% 
+  full_join(osa_mir, by = "miR") %>% 
+  #mutate(n.ch = nchar(miR)) %>% 
+  #mutate(fam = substr(miR, 1, (n.ch - 1))) %>% 
+  gather("sample_ID", "counts", 2:25) %>% 
+  group_by(sequence, sample_ID) %>%
+  summarise(sum.count = sum(counts)) %>% 
+  spread(sample_ID, sum.count) %>% 
+  full_join(osa_mir_unique, by = "sequence") %>% 
+  arrange(T2) %>% 
+  dplyr::select(-T2)
+
+cts_seq <- cts_seq[complete.cases(cts_seq), ]
+cts_seq %>% head(10)  
+
+
+dim(cts_seq)[1] == dim(osa_mir_unique)[1]
+
+#cts_seq %>% filter(str_detect(miR, "159"))
+```
+
+#EdgeR
+```{r}
+sample_des_lib_pca <- sample_des_lib %>% 
+  filter(sample_type == "sperm"|
+           sample_type == "egg"|
+           sample_type == "seedling shoot"|
+           sample_type == "ovary"| 
+           sample_type == "zygote")
+
+sample_des_lib_pca
+
+write_excel_csv( sample_des_lib_pca, "sample_description_miR.csv")
+```
+
+```{r}
+#sample_des_lib_pca$sample_ID
+cts_matrix <- cts%>% 
+  select(B15, B20, B25, BS1, BS2, BS4a, BS4b, BS6a, BS6b,
+         E2, E3, E4, E9a, E9b, E9c,
+         OV1a, OV1b, OV2,
+         SD4, SD7, SP5b,
+         SP5c, zg1d, zg1e, zg2d, zg2e, zg3a, zg3b) %>%
+  as.data.frame()
+row.names(cts_matrix) <- cts$miR
+
+y <- DGEList(counts=cts_matrix, group=sample_des_lib_pca$sample_type, lib.size = sample_des_lib_pca$`total read`)    
+y$samples
+
+keep <- rowSums(cpm(y)> 1) >= 3
+#keep <- filterByExpr(y)
+y <- y[keep, , keep.lib.sizes = T]
+y <- calcNormFactors(y, method = "none")
+y$samples
+
+design <- model.matrix(~ 0 + sample_des_lib_pca$sample_type)
+y <- estimateDisp(y, design)
+plotBCV(y)
+```
+#PCA plots
+```{r}
+cpm <- cpm(y, log =F) %>% as.data.frame()
+logcpm <- cpm(y, log =T) %>% as.data.frame()     
+write.csv(cpm, "miR_cpm.csv")
+adonis((t(logcpm)) ~ sample_type, sample_des_lib_pca, method= "e")
+```
+
+```{r}
+pc <- prcomp(t(logcpm))
+pc_importance <- as.data.frame(t(summary(pc)$importance))
+pc_importance
+
+ggplot(pc_importance, aes(x = 1:length( `Proportion of Variance`), y = `Proportion of Variance`) ) +
+  geom_bar(stat = 'identity') +
+  xlab('dimension') +
+  theme_classic()
+
+ggplot(pc_importance, aes(x = 1:length(`Cumulative Proportion`), y = `Cumulative Proportion`) ) +
+  geom_point() +
+  xlab('dimension') +
+  ylab('cumulative variance') +
+  ylim(c(0, 1.1))+
+  theme_classic()
+
+pc_nice <- cbind(sample_des_lib_pca, pc$x)
+pc_nice <- pc_nice %>% 
+  mutate(type = case_when(
+    sample_type == "seedling shoot" |
+      sample_type == "root" |
+      sample_type == "leaf" ~ "vegetative",
+    sample_type == "egg" |
+      str_detect(sample_type, "ovary") ~ "female",
+    sample_type == "sperm" |
+      str_detect(sample_type, "spikelet") |
+      str_detect(sample_type, "anther") ~ "male",
+    str_detect(sample_type, "zygote") ~ "zygote"
+  )) %>% 
+  mutate(type = factor(type, levels = c("female", "vegetative", "male", "zygote")))
+```
+
+```{r}
+pc_nice %>% 
+  filter(sample_type == "seedling shoot"|
+           sample_type == "egg"|
+           sample_type == "sperm"|
+           #sample_type == "ovary"|
+           sample_type == "zygote") %>% 
+  mutate(sample_type1 = case_when(
+    sample_type == "seedling shoot" ~ "seedling",
+    sample_type != "seedling shoot" ~ sample_type
+  )) %>% 
+  ggplot(aes(PC1, PC2)) +
+  stat_ellipse(aes(fill = type), alpha = 0.3, level = 0.9, type = "t", geom = "polygon") +
+  geom_point(aes(color = sample_type1), size = 3, alpha = 0.8) +
+  labs(x = paste("PC1 (", pc_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
+       y = paste("PC2 (", pc_importance[2, 2] %>% signif(3)*100, "% of Variance)", "  ", sep = ""),
+       fill = NULL,
+       color = NULL) +
+  scale_color_manual(values = c(  "tomato1", "seagreen", "dodgerblue2", "violetred2"),
+                   limits = c("egg", "seedling", "sperm", "zygote")) +
+  guides(fill = F) +
+  theme_bw() + 
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black")) 
+
+ggsave(filename = "miR_PCA.svg", width = 6, height = 5)
+ggsave(filename = "miR_PCA.png", width = 6, height = 5)
+```
+```{r}
+pc_nice %>% 
+  filter(sample_type == "seedling shoot"|
+           sample_type == "egg"|
+           sample_type == "sperm"|
+           #sample_type == "ovary"|
+           sample_type == "zygote") %>% 
+  mutate(sample_type1 = case_when(
+    sample_type == "seedling shoot" ~ "seedling\nshoot",
+    sample_type != "seedling shoot" ~ sample_type
+  )) %>% 
+  ggplot(aes(PC1, PC2)) +
+  #stat_ellipse(aes(fill = type), alpha = 0.3, level = 0.9, type = "t", geom = "polygon") +
+  geom_point(aes(color = sample_type1), size = 3, alpha = 0.8) +
+  geom_label(aes(label = sample_ID), nudge_x = 2, nudge_y = 2) +
+  labs(x = paste("PC1 (", pc_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
+       y = paste("PC2 (", pc_importance[2, 2] %>% signif(3)*100, "% of Variance)", "  ", sep = ""),
+       fill = NULL,
+       color = NULL) +
+  scale_color_manual(values = c("orangered3", "tomato1", "seagreen", "dodgerblue2", "violetred2"),
+                   limits = c("ovary", "egg", "seedling\nshoot", "sperm", "zygote")) +
+  theme_bw()+
+# theme(legend.position = "bottom", legend.box = "vertical",legend.spacing.y = unit(0.2, "lines"))+
+  theme(text = element_text(size= 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+```
+
+
+#miRNA clusters
+egg vs. seedling vs. sperm vs. zygote
+```{r}
+logcpm %>% head(10)
+```
+
+```{r}
+logcpm_long <- logcpm %>% 
+  mutate(miR = row.names(logcpm)) %>% 
+  gather("sample_ID", "logCPM", 1:ncol(logcpm)) %>%  #collect logCPM
+  mutate(sample_type = case_when(          #identify samples
+    sample_ID == "E2" |
+      sample_ID == "E3" |
+      sample_ID == "E4" |
+      sample_ID == "E9a" |
+      sample_ID == "E9b" |
+      sample_ID == "E9c" ~ "egg",
+    sample_ID == "SP5b" |
+      sample_ID == "SP5c" |
+      sample_ID == "BS1" |
+      sample_ID == "BS2" |
+      sample_ID == "BS4a" |
+      sample_ID == "BS4b" |
+      sample_ID == "BS6a" |
+      sample_ID == "BS6b"  ~ "sperm", 
+    sample_ID == "B15" |
+      sample_ID == "B20" |
+      sample_ID == "B25" |
+      sample_ID == "SD4"|
+      sample_ID == "SD7" ~ "seedling shoot", 
+    str_detect(sample_ID, "zg") ~ "zygote",
+  )) %>% 
+  filter(sample_type == "egg"|
+           sample_type == "seedling shoot" |
+           sample_type == "sperm"|
+           sample_type == "zygote") %>%   
+  group_by(sample_type, miR) %>% 
+  summarise(logCPM = mean(logCPM)) %>%   #average reps up to sample type
+  ungroup() %>% 
+  group_by(miR) %>% 
+  mutate(z = (logCPM - mean(logCPM))/sd(logCPM)) %>% #z score transformation
+  as.data.frame()
+  
+logcpm_long %>% head(10)
+```
+```{r}
+z <- logcpm_long[, c(1, 2, 4)] %>% 
+  spread(sample_type, z) %>% 
+  as.data.frame()
+
+row.names(z) <- z$miR
+z
+```
+```{r}
+all.dist <- dist(z[2:5], method = "e") 
+all.hc <- hclust(all.dist, method = "complete")
+plot(all.hc)
+```
+```{r}
+all.clust.obj <- cutreeHybrid(dendro = all.hc, distM = as.matrix(all.dist), minClusterSize = 5)
+
+temp2 <- all.clust.obj$labels %>% 
+  as.data.frame()
+
+colnames(temp2) <- "cluster_name"
+
+temp3 <- cbind(colnames(as.matrix(all.dist)), temp2) %>% 
+  as.data.frame()
+
+colnames(temp3)[1] <- "miR"
+temp3
+
+unique(temp3$cluster_name) %>% length()
+```
+```{r}
+logcpm_clust <- temp3 %>% 
+  inner_join(logcpm_long, by = "miR")
+```
+```{r}
+write_excel_csv(temp3, "cluster_assignment_new.csv")
+
+temp3 %>% 
+  group_by(cluster_name) %>% 
+  count() %>% 
+  ggplot(aes(x = cluster_name, y = n)) +
+  geom_point() +
+  labs(x = "cluster",
+       y = "number of miR") +
+  theme_classic() 
+```
+```{r}
+#order cluster
+hcd <- as.dendrogram(all.hc)
+dend_data <- dendro_data(hcd, type = "rectangle")
+head(dend_data$labels)
+```
+
+```{r}
+logcpm_clust2 <- logcpm_clust %>% 
+   inner_join(dend_data$labels, by = c("miR" = "label"))
+
+cluster_order <- logcpm_clust2 %>% 
+  distinct(miR, .keep_all = T) %>% 
+  group_by(cluster_name) %>% 
+  summarise(order = mean(x)) %>% 
+  ungroup()
+
+logcpm_clust3 <- logcpm_clust2 %>% 
+  inner_join(cluster_order, by = "cluster_name") %>% 
+  mutate(cluster_name = as.factor(cluster_name)) %>% 
+  mutate(cluster_name = reorder(cluster_name, order))
+head(logcpm_clust3)
+```
+```{r}
+logcpm_clust3 %>% 
+  ggplot(aes(x = sample_type, y = z)) +
+  facet_wrap(~ cluster_name, ncol = 6)+
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  geom_line(aes(group = miR), alpha = 0.8, color = "grey40") +
+  stat_summary(geom = "line", aes(group = cluster_name, 
+                                  color = cluster_name), 
+               fun.y = mean, size = 2, alpha = 0.8) +
+  scale_x_discrete(labels = c("egg", "seedling", "sperm", "zygote")) +
+  scale_y_continuous(breaks = c(-1, 0, 1)) +
+  labs(x = NULL,
+       y = "z score") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust= 1, vjust = 0.5)) +
+  theme(legend.position = "none") +
+  theme(text = element_text(size = 17, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+
+ggsave(filename = "miR_clusters.svg", width = 5.6, height = 6)
+ggsave(filename = "miR_clusters.png", width = 5.6, height = 6)
+```
+
+
+```{r}
+ggplot(logcpm_clust3,
+       aes(x =sample_type, y = miR)) +
+  facet_grid(reorder(cluster_name, order) ~ ., scales = "free") + 
+  geom_tile(aes(fill = z)) +
+  scale_fill_gradientn(colours = rev(brewer.pal(11, "Spectral")), 
+                       breaks = c(-1, 0, 1)) +
+  #scale_fill_gradientn(colours = inferno(11)) +
+  labs(fill = "z score",
+       x = NULL) +
+  scale_x_discrete(labels = c("egg", "seedling", "sperm", "zygote")) +
+  theme_minimal() +
+  theme(legend.key.height = unit(1.5, "lines")) +
+  theme(text = element_text(size= 14, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black", angle = 45, hjust = 1)) +
+  theme(axis.text.y = element_blank()) 
+
+ggsave(filename = "miR_heatmap.png", width = 3, height = 8)
+```
+
+
+
+#differential expressions
+```{r}
+fit <- glmQLFit(y, design, robust = T) 
+z_e <- glmTreat(fit,  contrast = c(-1, 0, 0, 0, 1), lfc = 1) 
+z_ov <- glmTreat(fit, contrast = c(0, -1, 0, 0, 1), lfc = 1) 
+z_sd <- glmTreat(fit, contrast = c(0, 0, -1, 0, 1), lfc = 1) 
+z_sp <- glmTreat(fit, contrast = c(0, 0, 0, -1, 1), lfc = 1) 
+```
+
+
+```{r}
+z.vs.e <- z_e$table %>% 
+  mutate(FDR = p.adjust(PValue, method = "fdr")) %>% 
+  mutate("sig"=ifelse(FDR < 0.05,"s","ns")) %>%
+  mutate("miR" = row.names(z_e$table))
+
+z.vs.e %>% 
+  filter(sig == "s") %>% 
+  filter(logFC < 0)
+```
+```{r}
+z.vs.ov <- z_ov$table %>% 
+  mutate(FDR = p.adjust(PValue, method = "fdr")) %>% 
+  mutate("sig"=ifelse(FDR < 0.05,"s","ns")) %>%
+  mutate("miR" = row.names(z_sd$table))
+
+z.vs.ov %>% 
+  filter(sig == "s")# %>% 
+ # filter(logFC <0) %>% 
+ # head()
+```
+
+
+```{r}
+z.vs.sd <- z_sd$table %>% 
+  mutate(FDR = p.adjust(PValue, method = "fdr")) %>% 
+  mutate("sig"=ifelse(FDR < 0.05,"s","ns")) %>%
+  mutate("miR" = row.names(z_sd$table))
+
+z.vs.sd %>% 
+  filter(sig == "s") %>% 
+  head()
+```
+```{r}
+z.vs.sp <- z_sp$table %>% 
+  mutate(FDR = p.adjust(PValue, method = "fdr")) %>% 
+  mutate("sig"=ifelse(FDR < 0.05,"s","ns")) %>%
+  mutate("miR" = row.names(z_sd$table))
+
+z.vs.sp %>% 
+  filter(sig == "s") %>% 
+  head()
+```
+
+
+#visualization on per million miRNA scale
+```{r}
+a <- DGEList(counts = cts_matrix ,group=sample_des_lib_pca$sample_type)    
+a$samples
+
+keep <- rowSums(cpm(a)> 0) >= 3 
+#keep <- filterByExpr(y)
+a <- a[keep, , keep.lib.sizes = F]
+a <- calcNormFactors(a, method = "none")
+
+a$samples
+```
+```{r}
+counts_per_M_miR <- cpm(a, log =F) %>% as.data.frame()
+write.csv(cpm, "miR_cpm.csv")
+write.csv(counts_per_M_miR, "miR_counts_per_M_miRNA.csv")
+```
+
+```{r}
+cpm_l <- counts_per_M_miR %>% 
+  mutate(miR = row.names(counts_per_M_miR)) %>% 
+  gather("sample_ID", "CPM", 1:ncol(counts_per_M_miR)) %>% 
+   mutate(sample_type = case_when(
+    sample_ID == "E2" |
+      sample_ID == "E3" |
+      sample_ID == "E4" |
+      sample_ID == "E9a" |
+      sample_ID == "E9b" |
+      sample_ID == "E9c" ~ "egg",
+      sample_ID == "SP5b" |
+      sample_ID == "SP5c" |
+      sample_ID == "BS1" |
+      sample_ID == "BS2" |
+      sample_ID == "BS4a" |
+      sample_ID == "BS4b" |
+      sample_ID == "BS6a" |
+      sample_ID == "BS6b"  ~ "sperm", 
+      sample_ID == "B15" |
+      sample_ID == "B20" |
+      sample_ID == "B25" |
+      sample_ID == "SD4" |
+      sample_ID == "SD7" ~ "seedling shoot", 
+      sample_ID == "OV1a" |
+      sample_ID == "OV1b" |
+      sample_ID == "OV2" ~ "ovary",
+      str_detect(sample_ID, "zg") ~ "zygote"
+    )) 
+
+head(cpm_l)
+```
+
+
+##high egg low zygote 
+```{r}
+ z.vs.e %>% 
+  filter(sig == "s") %>% 
+  filter(logFC < 0) %>% 
+  inner_join(cpm_l, by = "miR") %>% 
+  filter(sample_type == "egg" |
+           sample_type == "zygote"|
+           sample_type == "ovary") %>% 
+  mutate(sample_type = factor(sample_type, levels = c(
+    "ovary", "egg", "zygote"
+  ))) %>% 
+  mutate(header = substr(miR, start = 5, stop = 100)) %>% 
+  ggplot(aes(x = sample_type, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  # geom_point(position = position_jitter(0.2, seed = 666), shape = 21, color = "black", alpha = 0.8) +
+  stat_summary(geom = "line", aes(group = miR, color = -log10(FDR)), 
+               fun.y = mean, size = 2, alpha = 0.8, lineend = "round") +
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", width = 0.3) +
+  facet_wrap(~ header, scales = "free_y", ncol = 4) +
+  labs(x = NULL,
+       y = "counts per million miR reads",
+       color = "-log10(FDR)\nzygote vs. egg ") +
+  scale_color_gradientn(colours = brewer.pal(9, "YlOrRd")[c(6:9)], breaks = c(2, 3)) +
+  theme_minimal() +
+  theme(legend.position = c(0.75, 0.05), legend.direction = "horizontal") +
+  theme(legend.key.width = unit(1, "lines")) +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 14, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black")) 
+
+ggsave(filename = "DE_miR_zy_egg.svg", width = 6.5, heigh = 4) 
+ggsave(filename = "DE_miR_zy_egg.png", width = 6.5, heigh = 4) 
+```
+ 
+
+
+```{r}
+ z.vs.e %>% 
+  filter(sig == "s") %>% 
+  filter(logFC < 0) %>% 
+  inner_join(cpm_l, by = "miR") %>% 
+  filter(sample_type == "egg" |
+         sample_type == "zygote") %>% 
+  mutate(header = substr(miR, start = 5, stop = 100)) %>% 
+  ggplot(aes(x = sample_type, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  geom_bar(stat = "summary", aes(fill = sample_type), alpha = 0.8, fun.y = mean) + 
+  #stat_summary(geom = "line", aes(group = miR, color = -log10(FDR)), 
+  #             fun.y = mean, size = 2, alpha = 0.8, lineend = "round") +
+  geom_point(position = position_jitter(0.1, seed = 666), 
+             shape = 21, color = "white", alpha = 0.8,
+             aes(fill = sample_type)) + 
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", width = 0.3) +
+  facet_wrap(~ header, scales = "free_y", ncol = 4) +
+  labs(x = NULL,
+       y = "counts per million miR reads",
+       fill = NULL) +
+  #scale_color_gradientn(colours = brewer.pal(9, "YlOrRd")[c(6:9)], breaks = c(2, 3)) +
+  scale_fill_manual(values = c("tomato1",  "violetred2"),
+                   limits = c("egg", "zygote")) +
+  theme_minimal() +
+  theme(legend.position = c(0.75, 0.05), legend.direction = "horizontal") +
+  theme(legend.key.width = unit(1, "lines")) +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black")) 
+
+ggsave(filename = "DE_miR_zy_egg_dot.svg", width = 8, heigh = 5) 
+ggsave(filename = "DE_miR_zy_egg_dot.png", width = 8, heigh = 5)
+```
+
+
+
+
+
+##top miRNA in gametes
+```{r}
+#top miRNA in gametes
+cpm_s <- cpm_l %>% 
+  group_by(miR, sample_type) %>% 
+  summarise(CPM = mean(CPM)) %>% 
+  inner_join(osa_mir[, 2:3], by = "miR") %>% 
+  ungroup() %>% 
+  group_by(sequence, sample_type) %>% 
+  summarise(CPM = sum(CPM)) %>% 
+  inner_join(osa_mir_unique[, 2:3], by = "sequence") %>% 
+  mutate(miR2 = case_when(
+    str_detect(miR, "159a.1") ~ "osa-miR159a.1/b",
+    str_detect(miR, "159a.1") == F ~ miR
+  ))
+
+egg_top_10 <- cpm_s %>% 
+  filter(sample_type == "egg") %>% 
+  arrange(-CPM) %>% 
+  head(10)
+
+egg_top_10
+
+sperm_top_10 <- cpm_s %>% 
+  filter(sample_type == "sperm") %>% 
+  arrange(-CPM) %>% 
+  head(10)
+
+sperm_top_10
+
+
+sperm_enriched <- cpm_s %>% 
+  filter(sample_type == "sperm") %>% 
+  inner_join(logcpm_clust3, by = c("miR", "sample_type")) %>% 
+  filter(cluster_name == "18"|
+          cluster_name == "10" |
+           cluster_name == "8") %>% 
+  arrange(-CPM) %>% 
+  head(15)
+
+head(sperm_enriched)
+```
+ 
+
+```{r}
+z.vs.sp %>% 
+  inner_join(cpm_l, by = "miR") %>% 
+  filter(miR %in% sperm_enriched$miR) %>% 
+  filter(sample_type == "egg" |
+           sample_type == "zygote"|
+           sample_type == "sperm"|
+           sample_type == "ovary") %>% 
+  mutate(sample_type = factor(sample_type, levels = c(
+    "ovary", "egg", "sperm", "zygote"
+  ))) %>% 
+  mutate(header = substr(miR, start = 5, stop = 100)) %>% 
+  ggplot(aes(x = sample_type, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  stat_summary(geom = "line", aes(group = miR, color = logFC), 
+               fun.y = mean, size = 2, alpha = 0.8, lineend = "round") +
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", width = 0.3) +
+  facet_wrap(~ header, scales = "free_y", ncol = 4) +
+  labs(x = NULL,
+       y = "counts per million miR reads",
+       color = "log2FC\nzygote vs. sperm") +
+  scale_color_gradientn(colours = brewer.pal(9, "YlOrRd")[c(6:9)]) +
+  theme_minimal() +
+  theme(legend.position = "bottom", 
+        legend.direction = "horizontal",
+        legend.title.align = 0.5) +
+  theme(legend.key.width = unit(1, "lines")) +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black")) +
+  ggtitle("sperm enriched miRNA") 
+
+ggsave(filename = "sperm_enriched_miRNA.svg", width = 8, heigh = 7) 
+ggsave(filename = "sperm_enriched_miRNA.png", width = 8, heigh = 7) 
+```
+
+
+
+ 
+##de novo miRNA 
+```{r}
+egg_absent <- cpm_l %>% 
+  group_by(sample_type, miR) %>% 
+  summarise(mean_CPM = mean(CPM)) %>% 
+  ungroup() %>% 
+  filter(sample_type == "egg") %>%
+  filter(mean_CPM < 1)
+
+egg_absent %>% head()
+```
+```{r}
+z.vs.e %>% 
+  filter(sig == "s") %>% 
+  filter(logFC > 1) %>% 
+  inner_join(cpm_l, by = "miR") %>% 
+  filter(miR %in% egg_absent$miR) %>% 
+  filter(sample_type == "egg" |
+           sample_type == "zygote"|
+           sample_type == "sperm"|
+           sample_type == "ovary") %>% 
+  mutate(sample_type = factor(sample_type, levels = c(
+    "ovary", "egg", "sperm", "zygote"
+  ))) %>% 
+  mutate(header = substr(miR, start = 5, stop = 100)) %>% 
+  ggplot(aes(x = sample_type, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  stat_summary(geom = "line", aes(group = miR, color = -log10(FDR)), 
+               fun.y = mean, size = 2, alpha = 0.8, lineend = "round") +
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", width = 0.3) +
+  #geom_point(alpha = 0.8) +
+  facet_wrap(~ header, scales = "free_y", ncol = 4) +
+  labs(x = NULL,
+       y = "counts per million miR reads",
+       color = "-log10(FDR)\nzygote vs. egg") +
+  scale_color_gradientn(colours = brewer.pal(9, "YlOrRd")[c(6:9)], breaks = c(2, 3, 4)) +
+  theme_minimal() +
+  theme(legend.position = c(0.75, 0.02), 
+        legend.direction = "horizontal") +
+  theme(legend.key.width = unit(1, "lines")) +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+
+ggsave(filename = "DE_miR_zy_up_egg.svg", width = 8, heigh = 7.5) 
+ggsave(filename = "DE_miR_zy_up_egg.png", width = 8, heigh = 7.5) 
+```
+
+
+##nice vocano plot
+```{r}
+z.vs.e %>% 
+  mutate(direction = case_when(
+    logFC > 0 & sig == "s" ~ "up",
+    logFC < 0 & sig == "s" ~ "down",
+    sig == "ns" ~ "ns"
+  )) %>% 
+  mutate(category = case_when(
+    direction == "down" ~ "down",
+    direction == "up" & 
+      miR %in% egg_absent$miR ~ "up & de novo",
+    direction == "up" &
+      miR %in% egg_absent$miR == F ~ "up",
+    direction == "ns" ~ "ns" 
+   )) %>% 
+  ggplot(aes(x = logFC, y = -log10(FDR))) +
+  geom_point(aes(fill = category, size = category), 
+             shape = 21, color = "white", alpha = 0.8) +
+  annotate(geom = "text", label = "down in zygote",
+           x = -3.5, y = Inf, size = 5, vjust = 1.2, fontface = "bold") +
+   annotate(geom = "text", label = "up in zygote",
+           x = 5.5, y = Inf, size = 5, vjust = 1.2, fontface = "bold") +
+  scale_size_manual(values = c(1.5, 2, 3, 3),
+                    limits = c("ns", "up", "up & de novo", "down")) +
+  scale_fill_manual(values = c("grey20", "violetred2",  "violetred4", "tomato1"),
+                    limits = c("ns", "up", "up & de novo", "down")) +
+  labs(fill = NULL) +
+  guides(size = F,
+         fill = guide_legend(nrow = 2)) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.line = element_line(size = 1.2),
+    text = element_text(size = 18, color = "black", face = "bold"),
+    axis.text = element_text(size = 18, color = "black", face = "bold")
+  )
+```
+##loading vs. logFC
+```{r}
+z.vs.e_rot <- pc$rotation %>% 
+  as.data.frame() %>% 
+  mutate(miR = rownames(.)) %>% 
+  inner_join(z.vs.e, by = "miR")
+  
+head(z.vs.e_rot)
+```
+
+```{r}
+z.vs.e_rot %>% 
+  #filter(abs(logFC) > 3) %>% 
+  ggplot(aes(x = PC1, y = PC2)) +
+  geom_segment(aes(x = 0, xend = PC1, y = 0, yend = PC2, color = logFC), 
+               arrow = arrow(length = unit(0.5, "lines")), size = 1) +
+  scale_color_gradientn(colours = rev(brewer.pal(11, "Spectral")), 
+                       breaks = c(-5, 5)) +
+  labs(x = paste("PC1 (", pc_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
+       y = paste("PC2 (", pc_importance[2, 2] %>% signif(3)*100, "% of Variance)", "  ", sep = ""),
+       fill = "logFC",
+       color = NULL) +
+  theme_bw() +
+  theme(text = element_text(size= 18, face="bold"),
+        axis.text=element_text(colour = "black"),
+        legend.position = "bottom")
+```
+```{r}
+test <- cor.test(z.vs.e_rot$logFC, z.vs.e_rot$PC1)
+
+z.vs.e_rot %>% 
+  ggplot(aes(y = PC1, x = logFC)) +
+  geom_point(alpha = 0.8)+
+  geom_smooth(method = "lm", alpha = 0.8) +
+  annotate(geom = "text", label = paste("r = ", signif(test$estimate, 3), "\n",
+                                        "P = ", signif(test$p.value, 2), sep = ""), 
+           size = 5, fontface = "bold", x = 5, y = Inf, hjust = 0, vjust = 1.2) +
+  labs(x = "logFC zygote vs egg",
+       y = "loading on PC1") 
+
+ggsave("PC1_vs_logFC.svg", height = 5, width = 4)
+ggsave("PC1_vs_logFC.png", height = 5, width = 4)
+```
+
+
+
+```{r}
+z.vs.e %>% 
+  #filter(sig == "s") %>% 
+  #filter(logFC > 1) %>% 
+  inner_join(cpm_l, by = "miR") %>% 
+  filter(miR == "osa-miR1850.1") %>% 
+  filter(sample_type == "egg" |
+           sample_type == "zygote"|
+           sample_type == "sperm"|
+           sample_type == "ovary"|
+           sample_type == "seedling shoot") %>% 
+  mutate(sample_type = factor(sample_type, levels = c(
+    "ovary", "egg", "sperm", "zygote", "seedling shoot"
+  ))) %>% 
+  mutate(header = substr(miR, start = 5, stop = 100)) %>% 
+  ggplot(aes(x = sample_type, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  stat_summary(geom = "line", aes(group = miR), 
+               fun.y = mean, size = 2, alpha = 0.8, lineend = "round") +
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", width = 0.3) +
+  #geom_point(alpha = 0.8) +
+  facet_wrap(~ header, scales = "free_y", ncol = 4) +
+  labs(x = NULL,
+       y = "counts per million miR reads") +
+  scale_color_gradientn(colours = brewer.pal(9, "YlOrRd")[c(6:9)], breaks = c(2, 3, 4)) +
+  theme_minimal() +
+  theme(legend.position = c(0.75, 0.02), 
+        legend.direction = "horizontal") +
+  theme(legend.key.width = unit(1, "lines")) +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+
+ggsave("miR1850.png", height = 5, width = 6)
+```
+ 
+```{r}
+z.vs.e %>% 
+  #filter(sig == "s") %>% 
+  #filter(logFC > 1) %>% 
+  inner_join(cpm_l, by = "miR") %>% 
+  filter(str_detect(miR, "miR390")) %>% 
+  filter(sample_type == "egg" |
+           sample_type == "zygote"|
+           sample_type == "sperm"|
+           sample_type == "ovary"|
+           sample_type == "seedling shoot") %>% 
+  mutate(sample_type = factor(sample_type, levels = c(
+    "ovary", "egg", "sperm", "zygote", "seedling shoot"
+  ))) %>% 
+  mutate(header = substr(miR, start = 5, stop = 100)) %>% 
+  ggplot(aes(x = sample_type, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  stat_summary(geom = "line", aes(group = miR), 
+               fun.y = mean, size = 2, alpha = 0.8, lineend = "round") +
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", width = 0.3) +
+  #geom_point(alpha = 0.8) +
+  facet_wrap(~ header, scales = "free_y", ncol = 4) +
+  labs(x = NULL,
+       y = "counts per million miR reads") +
+  scale_color_gradientn(colours = brewer.pal(9, "YlOrRd")[c(6:9)], breaks = c(2, 3, 4)) +
+  theme_minimal() +
+  theme(legend.position = c(0.75, 0.02), 
+        legend.direction = "horizontal") +
+  theme(legend.key.width = unit(1, "lines")) +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+
+ggsave("miR390.png", height = 5, width = 6)
+```
+
+
+```{r}
+z.vs.e %>% 
+  filter(sig == "s") %>% 
+  filter(logFC > 1) %>% 
+  inner_join(cpm_l, by = "miR") %>% 
+  filter(miR %in% egg_absent$miR) %>% 
+  filter(sample_type == "egg" |
+           sample_type == "zygote"|
+           sample_type == "sperm") %>% 
+  mutate(header = substr(miR, start = 5, stop = 100)) %>% 
+  ggplot(aes(x = sample_type, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  stat_summary(geom = "line", aes(group = miR, color = -log10(FDR)), 
+               fun.y = mean, size = 2, alpha = 0.8, lineend = "round") +
+  geom_point(alpha = 0.8, color = "black", shape = 21, fill = NA, position = position_jitter(0.1, seed = 666)) +
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", width = 0.3) +
+  facet_wrap(~ header, scales = "free_y", ncol = 4) +
+  labs(x = NULL,
+       y = "counts per million miR reads",
+       color = "-log10(FDR)\nzygote vs. egg") +
+  scale_color_gradientn(colours = brewer.pal(9, "YlOrRd")[c(6:9)], breaks = c(2, 3, 4)) +
+  theme_minimal() +
+  theme(legend.position = c(0.75, 0.02), 
+        legend.direction = "horizontal") +
+  theme(legend.key.width = unit(1, "lines")) +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+
+ggsave(filename = "DE_miR_zy_up_egg_dots.svg", width = 8, heigh = 7.5) 
+ggsave(filename = "DE_miR_zy_up_egg_dots.png", width = 8, heigh = 7.5) 
+```
+
+
+
+##high ovary low egg 
+```{r}
+zg_absent <- cpm_l %>% 
+  group_by(sample_type, miR) %>% 
+  summarise(mean_CPM = mean(CPM)) %>% 
+  ungroup() %>% 
+  filter(sample_type == "zygote") %>%
+  filter(mean_CPM < 1)
+
+zg_absent
+```
+
+```{r}
+ z.vs.ov %>% 
+  filter(sig == "s") %>% 
+  filter(logFC < 0) %>% 
+  inner_join(cpm_l, by = "miR") %>% 
+  filter(sample_type == "ovary" |
+           sample_type == "zygote") %>% 
+  mutate(header = substr(miR, start = 5, stop = 100)) %>% 
+  ggplot(aes(x = sample_type, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  stat_summary(geom = "line", aes(group = miR, color = -log10(FDR)), 
+               fun.y = mean, size = 2, alpha = 0.8, lineend = "round") +
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", width = 0.3) +
+  #geom_point(alpha = 0.8) +
+  facet_wrap(~ header, scales = "free_y", ncol = 1) +
+  labs(x = NULL,
+       y = "counts per million miR reads",
+       color = "-log10\n(FDR)") +
+  scale_color_gradientn(colours = brewer.pal(9, "YlOrRd")[c(4:9)], breaks = c(1.5, 2)) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  theme(legend.key.width = unit(1, "lines")) +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 14, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black"))
+
+ggsave(filename = "DE_miR_zy_ov.svg", width = 2.2, heigh = 8) 
+ggsave(filename = "DE_miR_zy_ov.png", width = 2.2, heigh = 8)
+```
+
+##egg absent ovary miR
+166a-5p, 166b-5p, 166e-5p, 166g-3p, 166h-3p, 166k-5p, 5519, 5790
+```{r}
+cpm_l %>%
+  inner_join(z.vs.ov, by = "miR") %>% 
+  filter(sample_type == "egg" |
+           sample_type == "zygote"|
+           sample_type == "ovary") %>% 
+  filter(str_detect(miR, "5519|5790")|
+           str_detect(miR, "166a-5p|166b-5p|166e-5p|166g-3p|166h-3p|166k-5p")) %>% 
+  mutate(header = substr(miR, start = 5, stop = 100)) %>% 
+  ggplot(aes(x = sample_type, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  stat_summary(geom = "line", aes(group = miR), 
+               fun.y = mean, size = 2, alpha = 0.8, lineend = "round") +
+  stat_summary(geom = "errorbar", fun.data = "mean_cl_boot", width = 0.3) +
+  facet_wrap(~ header, scales = "free_y", ncol = 4) +
+  labs(x = NULL,
+       y = "counts per million miR reads",
+       color = "-log10(FDR)") +
+  #scale_color_gradientn(colours = brewer.pal(9, "YlOrRd")[c(3:9)], breaks = c(1, 2)) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  theme(legend.key.width = unit(1, "lines")) +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black")) 
+
+ggsave("DE_miR_egg_ov_zg.svg", width = 8, heigh = 4)
+ggsave("DE_miR_egg_ov_zg.png", width = 8, heigh = 4)
+```
+
+
+
+#miR159 expression
+```{r}
+miR159_tb <- cpm_l %>% 
+  filter(str_detect(miR, "miR159"))
+
+miR159_tb
+```
+ 
+
+##miR159 by total smRNA in each sample type
+```{r}
+cts_l <- cts_matrix %>%
+  mutate(miR = row.names(cts_matrix)) %>% 
+  gather("sample_ID", "count", 1:ncol(cts_matrix)) %>% 
+  inner_join(sample_des_lib, by = "sample_ID") 
+
+head(cts_l)
+```
+
+```{r}
+miR159_tb_s <- cts_l %>%
+  filter(str_detect(miR, "miR159")) %>% 
+  group_by(sample_ID, sample_type, genotype) %>% 
+  summarise(total.count = sum(count)) %>% 
+  ungroup() %>% 
+  inner_join(smRNA_comp, by = "sample_ID") %>% 
+  mutate(proportion = total.count / miRNA) %>% 
+  group_by(sample_type, genotype) %>% 
+  summarise(mean.proportion = mean(proportion))
+
+miR159_tb_s
+
+write_excel_csv(miR159_tb_s, "miR159 proprotion out of total miRNA.csv")
+```
+```{r}
+miR159_tb <- cts_l %>%
+  filter(str_detect(miR, "miR159")) %>% 
+  mutate(CPM = count / miRNA * 10^6) %>% 
+  inner_join(osa_mir[, 2:3], by = "miR") %>% 
+  group_by(sequence, sample_type, genotype, sample_ID) %>% 
+  summarise(CPM = sum(CPM)) %>% 
+  inner_join(osa_mir_unique[, 2:3], by = "sequence") %>% 
+  mutate(miR2 = case_when(
+    str_detect(miR, "a.1") ~ "osa-miR159a.1/b",
+    str_detect(miR, "a.1") == F ~ miR
+  ))
+
+miR159_tb
+```
+
+```{r}
+miR159_tb %>% 
+  filter(sample_type == "egg"|
+          # sample_type == "ovary"|
+           sample_type == "sperm"|
+           sample_type == "seedling shoot"|
+           sample_type == "zygote") %>% 
+  mutate(sample_type = case_when(
+    str_detect(sample_type, "seedling") ~ "seedling",
+    T ~ sample_type
+  )) %>% 
+  mutate(header = substr(miR2, start = 5, stop = 100))%>%
+  mutate(sample_type.f = factor(sample_type, levels = c(
+    "egg", "seedling shoot", "sperm", "zygote"
+  ))) %>% 
+  ggplot(aes(x = sample_type.f, y = CPM)) +
+  geom_vline(xintercept = -Inf, size = 1.5) +
+  geom_hline(yintercept = -Inf, size = 1.5) +
+  geom_bar(stat = "summary", aes(fill = sample_type), alpha = 0.8, fun.y = mean) +
+  geom_point(shape = 21, color = "white", aes(fill = sample_type),
+             position = position_jitter(0.2, seed = 666), alpha = 0.8) + 
+  stat_summary(geom = "errorbar", aes(group = sample_type), fun.data = "mean_cl_boot", width = 0.3) +
+  facet_wrap(~ header, ncol = 2, scales = "free_y") + 
+  scale_x_discrete(labels = NULL) + 
+  scale_fill_manual(values = c("tomato1", "seagreen", "dodgerblue2", "violetred2"),
+                   limits = c("egg", "seedling", "sperm", "zygote")) +
+  labs(x = NULL,
+       y = "counts per million miRNA reads",
+       fill = NULL) +
+  guides(fill = guide_legend(ncol = 2)) + 
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  theme(axis.text.x = element_text(angle = 45, hjust= 1)) +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(axis.text.x=element_text(colour = "black", size = 18)) +
+  theme(axis.text.y=element_text(colour = "black")) +
+  theme(strip.text.x=element_text(colour = "black", size = 12)) 
+
+ggsave(filename = "miR159_gametes.svg", height = 5, width = 4)
+ggsave(filename = "miR159_gametes.png", height = 5, width = 4)
+```
+
+```{r}
+smRNA_comp %>% 
+  filter(str_detect(sample_ID, "zg|E")) %>% 
+  select(sample_ID, `total read`)
+```
+```{r}
+cpm %>% 
+  mutate(miR = rownames(cpm)) %>% 
+  filter(miR == "osa-miR159a.1") %>% 
+  gather("sample_ID", "CPM", 1:28) %>% 
+  filter(str_detect(sample_ID, "zg|E")) 
+```
+
+```{r}
+miR159_lib_size <- cpm %>% 
+  mutate(miR = rownames(cpm)) %>% 
+  filter(miR == "osa-miR159a.1") %>% 
+  gather("sample_ID", "CPM", 1:28) %>% 
+  filter(str_detect(sample_ID, "zg|E")) %>% 
+  inner_join(
+    smRNA_comp %>% 
+  filter(str_detect(sample_ID, "zg|E")) %>% 
+  select(sample_ID, `total read`), 
+  by = "sample_ID"
+  ) 
+  
+
+miR159_lib_size
+```
+```{r}
+cor.test(miR159_lib_size$CPM, miR159_lib_size$`total read`)
+```
+
+
+```{r}
+miR159_lib_size %>% 
+  mutate(sample_type = case_when(
+    str_detect(sample_ID, "zg") ~ "zygote",
+    T ~ "egg"
+  )) %>% 
+  ggplot(aes(x = `total read`, y = CPM)) +
+  geom_point(aes(color = sample_type), size = 3) +
+  scale_color_manual(values = c("tomato1", "violetred2")) +
+  labs(y = "miR159a.1\ncounts per million siRNA",
+       color = NULL) +
+  theme(
+    legend.position = c(0.8, 0.8)
+  )
+
+ggsave("miR159_vs_lib_size.svg", height = 5, width = 5)
+ggsave("miR159_vs_lib_size.png", height = 5, width = 5)
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
