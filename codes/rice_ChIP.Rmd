@@ -34,7 +34,7 @@ set.seed(6)
 #data 
 ##read data 
 ```{r}
-PE101_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/ChIP_2020_08_05/PE101", 
+PE101_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/ChIP_2020_08_05/PE101_ChIP_Coverage (2)", 
                          pattern = "*.cov", full.names = T)
 
 SE36_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/ChIP_2020_08_05/SE36", 
@@ -248,10 +248,10 @@ pc$x %>%
   geom_hline(yintercept = 0, linetype = 4) +
   geom_point(aes(color = category), size = 3, alpha = 0.8)  +
   scale_color_manual(values = c("black", "orange2", "grey70",
-                               "orangered3", "orangered1", "seagreen", "dodgerblue2", "violetred2"), 
+                               "orangered3", "orangered1", "seagreen", "dodgerblue2"), 
                     limits = c("genes", "TIR", "Gypsy", 
-                               "ovary siren loci", "ovary siRNA loci", "seedling siRNA loci", "sperm siRNA loci", 
-                               "zygote specific loci")) +
+                               "ovary siren loci", "ovary siRNA loci", "seedling siRNA loci", "sperm siRNA loci"
+                                )) +
   labs(x = paste("PC1 (", pc_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
        y = paste("PC2 (", pc_importance[2, 2] %>% signif(3)*100, "% of Variance)", "  ", sep = ""),
        fill = NULL,
@@ -377,10 +377,10 @@ a <- pc$x %>%
   geom_hline(yintercept = 0, linetype = 4) +
   geom_point(aes(color = category), size = 3, alpha = 0.8)  +
   scale_color_manual(values = c("black", "orange2", "grey70",
-                               "orangered3", "orangered1", "seagreen", "dodgerblue2", "violetred2"), 
+                               "orangered3", "orangered1", "seagreen", "dodgerblue2"), 
                     limits = c("genes", "TIR", "Gypsy", 
-                               "ovary siren loci", "ovary siRNA loci", "seedling siRNA loci", "sperm siRNA loci", 
-                               "zygote specific loci")) +
+                               "ovary siren loci", "ovary siRNA loci", "seedling siRNA loci", "sperm siRNA loci"
+                               )) +
   labs(x = paste("PC1 (", pc_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
        y = paste("PC2 (", pc_importance[2, 2] %>% signif(3)*100, "% of Variance)", "  ", sep = ""),
        fill = NULL,
@@ -404,10 +404,9 @@ legend.source <- get_legend(
   geom_hline(yintercept = 0, linetype = 4) +
   geom_point(aes(color = category), size = 3, alpha = 0.8)  +
   scale_color_manual(values = c("black", "orange2", "grey70",
-                               "orangered3", "orangered1", "seagreen", "dodgerblue2", "violetred2"), 
+                               "orangered3", "orangered1", "seagreen", "dodgerblue2"), 
                     limits = c("genes", "TIR", "Gypsy", 
-                               "ovary siren loci", "ovary siRNA loci", "seedling siRNA loci", "sperm siRNA loci", 
-                               "zygote specific loci")) +
+                               "ovary siren loci", "ovary siRNA loci", "seedling siRNA loci", "sperm siRNA loci")) +
   labs(x = paste("PC1 (", pc_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
        y = paste("PC2 (", pc_importance[2, 2] %>% signif(3)*100, "% of Variance)", "  ", sep = ""),
        fill = NULL,
