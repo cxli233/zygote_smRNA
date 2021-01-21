@@ -1,0 +1,401 @@
+---
+title: "Expression of sirens"
+author: "Chenxin Li"
+date: "10/16/2020"
+output:  
+  html_notebook:
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+  html_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(tidyr)
+library(dplyr)
+library(readr)
+library(readxl)
+library(RColorBrewer)
+library(viridis)
+library(stringr)
+library(svglite)
+library(cowplot)
+library(forcats)
+```
+
+# load data
+```{r message=FALSE}
+siren_cov_list <- list.files("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/fovary_bed_cov/siren_cov/", 
+                             pattern = "*siren_loci*", full.names = T)
+
+siren_cov <- sapply(siren_cov_list, read_delim, simplify = FALSE, col_names = F, delim = "\t") %>% 
+  bind_rows(.id = "id")
+
+head(siren_cov)
+```
+```{r message=F}
+sample_des <- read_excel("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/sample_des_clvs12.xlsx")
+
+smRNA_comp <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/codes_and_output/smRNA_comp.csv")
+
+sample_des_size <- smRNA_comp %>% 
+  inner_join(sample_des, by = c("sample_ID")) %>% 
+  select(-2, -3, -4, -5, -6)
+
+sample_des_size
+```
+
+
+# clean data
+select egg seedling sperm ovary embryo endosperm zygote (7)  
+```{r}
+identify_samples <- function(df){
+  df %>% 
+    mutate(sample_ID = case_when(
+    str_detect(id, "sperm.1") ~ "BS1", #1
+    str_detect(id, "Sperm2") ~ "BS2",  #2
+    str_detect(id, "Sperm4a") ~ "BS4a",  #3
+    str_detect(id, "sperm4b") ~ "BS4b",  #4
+    str_detect(id, "sperm6a") ~ "BS6a",  #5
+    str_detect(id, "sperm6b") ~ "BS6b",  #6
+    str_detect(id, "sperm.5b") ~ "SP5b", #7
+    str_detect(id, "sperm.5c") ~ "SP5c", #8
+    str_detect(id, "Bulk.15") ~ "B15",   #9
+    str_detect(id, "Bulk.20") ~ "B20",   #10
+    str_detect(id, "Bulk.25") ~ "B25",   #11
+    str_detect(id, "seedling4") ~ "SD4", #12
+    str_detect(id, "egg.9a") ~ "E9a",    #13
+    str_detect(id, "egg.9b") ~ "E9b",    #14
+    str_detect(id, "egg.9c") ~ "E9c",    #15
+    str_detect(id, "eggcell4") ~ "E4",   #16
+    str_detect(id, "eggcell3") ~ "E3",   #17
+    str_detect(id, "eggcell2") ~ "E2",   #18
+    str_detect(id, "ovary.no.egg.1a") ~ "OV1a",    #19
+    str_detect(id, "ovary.no.egg.1b") ~ "OV1b",    #20
+    str_detect(id, "Ovarynoegg2") ~ "OV2",         #21
+    str_detect(id, "SRR57") ~ "root",              #22
+    str_detect(id, "ab_control") ~ "ddm1_con",     #23
+    str_detect(id, "ddm1ab") ~ "ddm1",             #24
+    str_detect(id, "drm2-T-DNA_control") ~ "drm2_con",  #25 drm2-T-DNA_control.fastq
+    str_detect(id, "drm2-T-DNA.fas") ~ "drm2",          #26   
+    str_detect(id, "SRR2544786") ~ "em_dry", #27  
+    str_detect(id, "SRR5049778") ~ "an_pre",  #28
+    str_detect(id, "SRR5049779") ~ "an_mei",  #29
+    str_detect(id, "SRR5049780") ~ "an_mic",  #30
+    str_detect(id, "SRR5049781") ~ "an_bi",   #31
+    str_detect(id, "SRR5049786") ~ "ov_1st",  #32
+    str_detect(id, "SRR5049787") ~ "ov_2nd",  #33
+    str_detect(id, "SRR5049788") ~ "ov_3rd",  #34
+    str_detect(id, "SRR5049789") ~ "ov_4th",  #35
+    str_detect(id, "S3_1") ~ "S3_1",          #36
+    str_detect(id, "S3_2") ~ "S3_2",          #37
+    str_detect(id, "S3_3") ~ "S3_3",          #38
+    str_detect(id, "S5_1") ~ "S5_1",          #39
+    str_detect(id, "S5_2") ~ "S5_2",          #40
+    str_detect(id, "S5_3") ~ "S5_3",          #41
+    str_detect(id, "S7_1") ~ "S7_1",          #42
+    str_detect(id, "S7_2") ~ "S7_2",          #43
+    str_detect(id, "S7_3") ~ "S7_3",          #44
+    str_detect(id, "SRR2544787") ~ "em_12h",  #45
+    str_detect(id, "SRR2544788") ~ "em_24h",  #46
+    str_detect(id, "SRR771501") ~ "em_7DAF",  #47
+    str_detect(id, "SRR771500") ~ "en_7DAF",  #48   
+    str_detect(id, "SD7") ~ "SD7", #49
+    str_detect(id, "zg1d") ~ "zg1d", #50
+    str_detect(id, "zg1e") ~ "zg1e",  #51
+    str_detect(id, "zg2d") ~ "zg2d",  #52
+    str_detect(id, "zg2e") ~ "zg2e",  #53
+    str_detect(id, "zg3a") ~ "zg3a", #54
+    str_detect(id, "zg3b") ~ "zg3b" , #55
+    str_detect(id, "OV9H_1") ~ "OV9_1" , #56
+    str_detect(id, "OV9H_2") ~ "OV9_2" , #57
+    str_detect(id, "OV9H_3") ~ "OV9_3" , #58
+    str_detect(id, "SD8") ~ "SD8"  #59
+    ))
+}
+```
+
+```{r}
+siren_cov_clean <- siren_cov %>% 
+  filter(str_detect(id, "blender-sperm") |
+           str_detect(id, "BlenderSperm") |
+           str_detect(id, "Bulk") |
+           str_detect(id, "egg-9") |
+           str_detect(id, "eggcell") |
+           str_detect(id, "Ovarynoegg|ovary-no-egg-1") |
+           str_detect(id, "SD7|seedling4|SD8") |
+           str_detect(id, "sperm-5") |
+           str_detect(id, "SRR7715") |
+           str_detect(id, "zg") |
+           str_detect(id, "OV9H")
+  ) %>% 
+  mutate(siren_type = case_when(
+    str_detect(id, "egg_siren") ~ "egg siren loci",
+    str_detect(id, "fovary_siren") ~ "ovary (9hap) siren loci",
+    str_detect(id, "ovary_siren") ~ "ovary (0hr) siren loci",
+    str_detect(id, "zygote_siren") ~ "zygote siren loci",
+    str_detect(id, "endo_siren") ~ "endosperm siren loci"
+  )) %>% 
+  identify_samples() %>% 
+  inner_join(sample_des_size, by = "sample_ID") %>% 
+  mutate(RPM = X4/`general siRNA` * 10^6) 
+
+head(siren_cov_clean)  
+
+siren_cov_clean %>% 
+  group_by(siren_type) %>% 
+  count()
+```
+
+```{r}
+siren_cov_clean_s <- siren_cov_clean %>% 
+  group_by(siren_type, sample_type, X1, X2, X3) %>% 
+  summarise(
+    reads = sum(X4),
+    total = sum(`general siRNA`)
+  ) %>% 
+  ungroup() %>% 
+  mutate(RPM = (reads + 0.25) / total * 10^6) %>% 
+  mutate(RPKM = RPM/(X3 - X2) * 1000)
+
+head(siren_cov_clean_s)
+```
+
+```{r}
+siren_cov_clean_ss <- siren_cov_clean_s %>% 
+  group_by(siren_type, sample_type) %>% 
+  summarise(sum.reads = sum(reads),
+            NN = n(),
+            median = median(RPM),
+            IQR = IQR(RPM),
+            Q3 = quantile(RPM, 0.75),
+            Q1 = quantile(RPM, 0.25),
+            UL = quantile(RPM, 0.975),
+            LL = quantile(RPM, 0.025),
+            total = min(total)) %>% 
+  ungroup() %>% 
+  mutate(pro = sum.reads/total)
+
+siren_cov_clean_ss
+```
+
+# egg vs zygote
+```{r}
+siren_cov_clean_s_ez <- siren_cov_clean_s %>% 
+  filter(sample_type == "egg" |
+           sample_type == "zygote") %>% 
+  filter(siren_type == "egg siren loci") %>% 
+  select(X1, X2, X3, sample_type, RPM) %>% 
+  spread(sample_type, RPM)
+
+head(siren_cov_clean_s_ez)
+```
+```{r}
+siren_cov_clean_s_ez %>% 
+  filter(zygote == min(zygote)) %>% 
+  nrow()
+
+summary(siren_cov_clean_s_ez$zygote)
+```
+## correlation 
+```{r}
+test1 <- cor.test(siren_cov_clean_s_ez$egg, siren_cov_clean_s_ez$zygote)
+test1$p.value
+test1$estimate
+```
+## regression 
+```{r}
+model_egg_zygote <- lm(log(zygote) ~ log(egg) + 0 , siren_cov_clean_s_ez)
+summary(model_egg_zygote)
+```
+```{r}
+logticks = c(seq(0.01, 0.1, 0.01),
+             seq(0.1, 1, by = 0.1),
+             seq(1, 10, by = 1),
+             seq(10, 100, by = 10),
+             seq(100, 1000, by = 100),
+             seq(1000, 10000, by = 1000))
+
+loglabel <- data.frame("values" = logticks) %>% 
+  mutate(label1 = as.character(values)) %>% 
+  mutate(labels = case_when(
+    values == 0.1 |
+      values == 1 |
+      values == 10 |
+      values == 100 |
+      values == 1000 ~ label1,
+    T ~ ""
+  ))
+```
+
+```{r}
+siren_cov_clean_s_ez %>% 
+  ggplot(aes(x = egg, y = zygote)) +
+  geom_point(alpha = 0.5) +
+   geom_smooth(method = "lm") +
+  scale_x_log10(breaks = c(1, 10, 100, 1000)) +
+  scale_y_log10(breaks = c(1, 10, 100, 1000)) +
+  #annotation_logticks() +
+  labs(x = "RPM in egg",
+       y = "RPM in zygote") +
+  annotate(geom = "text",
+           label = "y = 0.84x, R^2 = 0.81",
+           size = 5, 
+           x = 1, y = Inf,
+           hjust = -0.1, vjust = 1.1) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 18, face = "bold", color = "black"),
+    axis.text = element_text(color = "black")
+  ) +
+  coord_fixed()
+
+ggsave("siren_expression_maintain_in_zygote.svg", height = 5, width = 5)
+ggsave("siren_expression_maintain_in_zygote.png", height = 5, width = 5)
+```
+ 
+
+# siren expression across samples 
+```{r}
+model_sirens <- lm(log10(RPM) ~ sample_type * siren_type, data = siren_cov_clean_s)
+anova(model_sirens)
+```
+
+```{r}
+est_sirens <- emmeans(model_sirens, pairwise ~ sample_type | siren_type)
+groupings <- multcomp::cld(est_sirens$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(group = str_remove_all(.group, " ")) %>% 
+   mutate(sample_type = factor(sample_type, levels = c(
+    "ovary", "egg", "seedling shoot", "sperm", "ovary_9hap","zygote", 
+    "embryo 7-8 DAF", "endosperm 7-8 DAF"
+  )))
+
+head(groupings, 20)
+```
+ 
+
+```{r}
+siren_cov_clean_ss %>%
+  mutate(sample_type2 = case_when(
+    str_detect(sample_type, "seedling") ~ "seedling",
+    str_detect(sample_type, "embryo 7-8 DAF") ~ "embryo",
+    str_detect(sample_type, "endosperm") ~ "endosperm",
+     str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)",
+     str_detect(sample_type, "ovary") &
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)",
+    T ~ sample_type
+  )) %>% 
+  mutate(sample_type.f = factor(sample_type2, levels = c(
+    "ovary (0hr)", "egg", "seedling", "sperm", "ovary (9hap)","zygote", 
+    "embryo", "endosperm"
+  ))) %>%  
+   mutate(sample_type = factor(sample_type, levels = c(
+    "ovary", "egg", "seedling shoot", "sperm", "ovary_9hap","zygote", 
+    "embryo 7-8 DAF", "endosperm 7-8 DAF"
+  ))) %>% 
+  inner_join(groupings, by = c("sample_type", "siren_type")) %>% 
+  mutate(siren_type = str_replace(siren_type, " siren loci", "\nsiren loci")) %>% 
+  mutate(siren_type = factor(siren_type, levels = c(
+    "ovary (0hr)\nsiren loci",
+    "ovary (9hap)\nsiren loci",
+    "egg\nsiren loci",
+    "zygote\nsiren loci",
+    "endosperm\nsiren loci" 
+  ))) %>% 
+  ggplot(aes(x = sample_type)) +
+  facet_grid(. ~ siren_type, switch = "x") + 
+  geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median, fill = sample_type2), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = sample_type, xend = sample_type,  y = Q3, yend = UL)) +
+  geom_segment(aes(x = sample_type, xend = sample_type,  y = Q1, yend = LL)) +
+  geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.3, size = 1) +
+  geom_text(aes(label = group, y = UL), size = 5, fontface = "bold", vjust = -0.3) +
+  scale_fill_manual(values = c("orangered3", "tomato1", 
+                               "seagreen", "dodgerblue2", "coral4",
+                               "violetred4", "grey20","lightgoldenrod3"),
+                   limits = c("ovary (0hr)", "egg", 
+                              "seedling", "sperm", "ovary (9hap)", 
+                              "zygote", "embryo","endosperm")) +
+  scale_x_discrete(labels = NULL) + 
+  scale_y_continuous(breaks = logticks,
+                     labels = loglabel$labels) +
+  labs(x = NULL,
+       y = "24-nt siRNA (RPM)",
+       fill = "siRNA\ntranscriptome",
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 2)) +
+  theme_minimal() +
+  theme(legend.position = "top",
+        legend.title = element_text(size = 15, hjust = 0.5)) + 
+  theme(axis.line = element_line(size = 1)) +
+  theme(panel.spacing.x = unit(0.7, "lines"),
+        strip.placement = "outside") +
+  theme(text = element_text(size = 14, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black")) +
+  coord_trans(y = "log10")   
+
+ggsave("siren_RPM.svg", height = 5.5, width = 10)
+ggsave("siren_RPM.png", height = 5.5, width = 10)
+```
+
+# how ovary siren in ovary vs egg (low in egg) 
+
+```{r}
+head(siren_cov_clean_s)
+
+siren_wide <- siren_cov_clean_s %>% 
+  select(X1, X2, X3, RPM, sample_type, siren_type) %>% 
+  spread(sample_type, RPM)
+
+head(siren_wide)
+```
+
+
+## scatter 
+```{r}
+model_ovary_siren_egg_ov <- lm(log(egg) ~ log(ovary) + 0, data = siren_wide %>% 
+                                 filter(siren_type == "ovary siren loci"))
+
+summary(model_ovary_siren_egg_ov)
+```
+
+```{r}
+siren_wide %>% 
+  filter(siren_type == "ovary siren loci") %>% 
+  ggplot(aes(y = egg, x = ovary)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  scale_x_log10(breaks = c(1, 10, 100, 1000)) +
+  scale_y_log10(breaks = c(1, 10, 100, 1000)) +
+  labs(x = "ovary RPM",
+       y = "egg RPM") +
+   annotate(geom = "text",
+           label = "y = 0.95x, R^2 = 0.99",
+           size = 5, 
+           x = 1, y = Inf,
+           hjust = -0.1, vjust = 1.1) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 18, face = "bold", color = "black"),
+    axis.text = element_text(color = "black")
+  ) +
+  coord_fixed() 
+
+ggsave("siren_expression_ovary_vs_egg.svg", height = 5, width = 5)
+ggsave("siren_expression_ovary_vs_egg.png", height = 5, width = 5)
+```
+
+
+
+

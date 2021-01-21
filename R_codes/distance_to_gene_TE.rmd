@@ -1,0 +1,970 @@
+---
+title: "Gene_distance_TE_cov"
+author: "Chenxin Li"
+date: "10/7/2020"
+output:  
+  html_notebook:
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+  html_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(emmeans)
+library(tidyr)
+library(dplyr)
+library(readr)
+library(readxl)
+library(RColorBrewer)
+library(viridis)
+library(stringr)
+library(svglite)
+library(cowplot)
+library(forcats)
+library(patchwork)
+```
+
+# gene distance
+## load data
+```{r, warning = FALSE, message = F}
+gene.dist.list <- list.files("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/Bed_cov_2020_10_14/closestGenes/", 
+                             pattern = "*gene.txt", full.names = T)
+
+gene_distance  <- sapply(gene.dist.list, read_delim, simplify = FALSE, col_names = F, delim = "\t") %>% 
+  bind_rows(.id = "id")
+
+head(gene_distance)
+```
+```{r message=F, warning=F}
+gene.dist.list.fov <- list.files("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/fovary_bed_cov/Closest_genes/", 
+                                 pattern = "*txt", full.names = T)
+
+gene_distance_fov <- sapply(gene.dist.list.fov, read_delim, simplify = F, col_names = F, delim = "\t") %>% 
+  bind_rows(.id = "id")
+
+head(gene_distance_fov)
+```
+
+## egg, sperm, seedling, ovary, endosperm, embryo, all siren
+```{r}
+gene_distance_siren <- gene_distance %>% 
+  rbind(gene_distance_fov) %>% 
+  filter(str_detect(id, "siren") |
+           str_detect(id, "egg_loci") |
+           str_detect(id, "sperm_loci") |
+           str_detect(id, "ovary_loci") |
+           str_detect(id, "zygote_loci") |
+           str_detect(id, "embryo_loci") |
+           str_detect(id, "seedling_loci") 
+           )
+
+gene_distance_siren <- gene_distance_siren %>% 
+  mutate(ID = case_when(
+           str_detect(id, "egg_siren") ~ "egg siren loci",
+           str_detect(id, "zygote_siren") ~ "zygote siren loci",
+           str_detect(id, "fovary_siren") ~ "ovary (9hap) siren loci",
+           str_detect(id, "ovary_siren") &
+             str_detect(id, "fovary") == F~ "ovary (0hr) siren loci",
+           str_detect(id, "endo_siren") ~ "endosperm siren loci",
+           str_detect(id, "egg_loci") ~ "egg siRNA loci",
+           str_detect(id, "endosperm_loci") ~ "endosperm siRNA loci",
+           str_detect(id, "sperm_loci") &
+             str_detect(id, "endo") == F ~ "sperm siRNA loci",
+           str_detect(id, "fovary_loci") ~ "ovary (9hap) siRNA loci",
+           str_detect(id, "ovary_loci") & 
+             str_detect(id, "fovary") == F ~ "ovary (0hr) siRNA loci",
+           str_detect(id, "zygote_loci") ~ "zygote siRNA loci", 
+           str_detect(id, "embryo_loci") ~ "embryo siRNA loci"  ,
+           str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+           
+  )) 
+```
+
+### summary stats
+```{r}
+gene_distance_siren_s <- gene_distance_siren %>% 
+  rename(distance = X13) %>% 
+  filter(distance >= 0) %>% 
+  group_by(ID) %>% 
+   summarise( 
+            NN = n(),
+            median = median(distance),
+            Q3 = quantile(distance, 0.75),
+            Q1 = quantile(distance, 0.25),
+            UL = quantile(distance, 0.975),
+            LL = quantile(distance, 0.025)) %>% 
+  ungroup()
+
+gene_distance_siren_s
+```
+
+### linear model and wilcox rank sum
+ 
+```{r}
+model_siren_dist <- lm(log10(distance + 1) ~ ID, gene_distance_siren %>% 
+                         rename(distance = X13) %>% 
+                         filter(distance >= 0))
+
+anova(model_siren_dist)
+```
+```{r}
+est_gene_dist_siren <- emmeans(model_siren_dist, pairwise ~ ID)
+multcomp::cld(est_gene_dist_siren$emmeans, Letters = letters)
+```
+```{r}
+est_gene_dist_siren$contrasts %>% 
+  as.data.frame() 
+```
+
+* Egg vs. Egg siren: 0.1 NS
+* Endo. vs Endo. siren: 0 ***
+* 0hr Ovary vs. overy siren: 4e-5 ***   
+* 9hap Ovary vs. ovary siren: 8e-14 ***     
+* Zygote vs. zygote siren: 0.4 NS
+
+
+```{r}
+pairwise.wilcox.test(x = gene_distance_siren$X13, g = gene_distance_siren$ID)$p.value %>% 
+  as.data.frame()
+```
+
+* Egg vs. Egg siren: 1 NS
+* Endo. vs Endo. siren: 6e-42 ***
+* 0hr Ovary vs. overy siren: 0.3 NS   
+* 9hap Ovary vs. ovary siren: 3e-7 ***     
+* Zygote vs. zygote siren: 1 NS
+
+```{r}
+gene_distance_siren_s %>% 
+  mutate(ID = reorder(ID, median)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ UL + 1000,
+    T ~ Q3 + 1000
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = 0, size = 5, fontface = "bold") + 
+  # scale_fill_manual(values = c("orangered3", "tomato1", "seagreen", "dodgerblue2",
+  #                              "violetred4",  "violetred4", "lightgoldenrod4", "orangered3", "lightgoldenrod4",
+  #                              "tomato1", "grey20"),
+  #                  limits = c(
+  #   "ovary siRNA loci", "egg siRNA loci", "seedling siRNA loci", "sperm siRNA loci",
+  #   "zygote siRNA loci", "zygote siren loci",  "endosperm siRNA loci",
+  #   "ovary siren loci", "endosperm siren loci",
+  #   "egg siren loci", "embryo siRNA loci"
+  # )) +
+  scale_y_continuous(breaks = c(0, 20, 40)) +
+  labs(x = NULL,
+       y = "kilobases to nearest gene",
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 18, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+ggsave("distance_near_gene_siren.svg", width = 7, height = 5)
+ggsave("distance_near_gene_siren.png", width = 7, height = 5)
+```
+
+## egg, sperm, zygote, zygote de novo, seedling, embryo 
+```{r}
+gene_distance_zygote <- gene_distance %>% 
+  rbind(gene_distance_fov) %>% 
+  filter(str_detect(id, "zygote_loci") |
+           str_detect(id, "zygote-egg_complement_loci.bed.closest_gene") |
+           str_detect(id, "egg_loci") |
+           str_detect(id, "sperm_loci") |
+           str_detect(id, "embryo_loci") |
+           str_detect(id, "egg-zygote_complement_loci.bed.closest_gene") |
+           str_detect(id, "seedling_loci") |
+           str_detect(id, "fovary-ovary") |
+           str_detect(id, "ovary-fovary") |
+           str_detect(id, "ovary") 
+           ) %>% 
+  filter(str_detect(id, "endo") == F) %>% 
+  filter(str_detect(id, "siren") == F) 
+
+gene_distance_zygote <- gene_distance_zygote %>% 
+  mutate(ID = case_when(str_detect(id, "zygote_loci")  ~ "zygote siRNA loci" , #1
+           str_detect(id, "zygote-egg_complement_loci.bed.") ~ "zygote NOT egg loci", #2
+           str_detect(id, "egg_loci") ~ "egg siRNA loci", #3
+           str_detect(id, "sperm_loci") & 
+             str_detect(id, "endo") == F ~ "sperm siRNA loci",  #4
+           str_detect(id, "embryo_loci") ~ "embryo siRNA loci",  #5
+           str_detect(id, "seedling_loci") ~ "seedling siRNA loci",  #6
+           str_detect(id, "egg-zygote_complement_loci.bed.")  ~ "egg NOT zygote loci",  #7
+           str_detect(id, "fovary-ovary") ~ "ovary 9hap NOT 0hr loci",  #8
+           str_detect(id, "ovary-fovary") ~ "ovary 0hr NOT 9hap loci0" ,  #9
+           str_detect(id, "fovary_loci.bed") ~ "ovary (9hap) siRNA loci", #10
+           str_detect(id, "ovary_loci") & 
+             str_detect(id, "fovary") == F ~ "ovary (0hr) siRNA loci" #11
+           
+  )) 
+```
+ 
+
+### summary stats
+```{r}
+gene_distance_zy_s <- gene_distance_zygote %>% 
+  rename(distance = X13) %>% 
+  filter(distance >= 0) %>% 
+  group_by(ID) %>% 
+   summarise( 
+            NN = n(),
+            median = median(distance),
+            Q3 = quantile(distance, 0.75),
+            Q1 = quantile(distance, 0.25),
+            UL = quantile(distance, 0.975),
+            LL = quantile(distance, 0.025)) %>% 
+  ungroup() 
+
+gene_distance_zy_s 
+```
+
+### linear model 
+
+```{r}
+model_zygote_dist <- lm(log10(distance + 1) ~ ID, gene_distance_zygote %>% 
+                         rename(distance = X13) %>% 
+                         filter(distance >= 0))
+
+anova(model_zygote_dist)
+```
+
+```{r}
+est_gene_dist_zy <- emmeans(model_zygote_dist, pairwise ~ ID)
+gene_dist_zy_results <- multcomp::cld(est_gene_dist_zy$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_remove_all(.group, " "))
+
+gene_dist_zy_results
+```
+```{r}
+est_gene_dist_zy$contrasts %>% as.data.frame()
+```
+
+* egg vs zygote: 1.3e-13 *** 
+* egg NOT zygote vs egg: 1 NS 
+* egg NOT zygote vs zygote NOT egg: 1e-13 *** 
+* embryo vs seedling: 0.09 NS 
+
+* OV0 vs OV9: 1 NS
+* OV0 vs OV0 NOT 9: 1 NS  
+* OV9 vs OV9 NOT 0: 0.8 NS
+
+* OV0 NOT 9 vs OV9 NOT 0: 1 NS
+
+* zygote NOT egg vs seedling: 1 NS
+* zygote NOT egg vs zygote: 0.037 * 
+* zygote NOT egg vs ...sperm: 0 ***
+* zygote NOT egg vs egg: 0 ***
+* zygote NOT egg vs embryo: 0.4 NS  
+
+```{r}
+pairwise.wilcox.test(x = gene_distance_zygote$X13, g = gene_distance_zygote$ID)$p.value %>% 
+  as.data.frame()
+```
+
+* egg vs. zygote: 2.9e-54 *** 
+* egg NOT zygote vs egg: 0.9 NS 
+* egg NOT zygote vs zygote NOT egg: 1.6e-66 *** 
+
+* OV0 vs OV9: 1.5e-3 **
+* OV0 vs OV0 NOT 9: 2e-5 ***  
+* OV9 vs OV9 NOT 0: 0.18 NS
+
+* OV0 NOT 9 vs OV9 NOT 0: 7e-7 *** 
+
+* zygote NOT egg vs seedling: 3.7e-6 *** 
+* zygote NOT egg vs zygote: 0.002 **  
+* zygote NOT egg vs ...sperm: 0 ***
+* zygote NOT egg vs egg: 1e-62 ***
+* zygote NOT egg vs embryo: 9e-3 **  
+
+
+### plot 
+#### 1
+```{r}
+group1 <- gene_distance_zy_s %>% 
+  inner_join(gene_dist_zy_results, by = "ID") %>% 
+  filter(ID == "ovary (0hr) siRNA loci" |
+           ID == "ovary (9hap) siRNA loci") %>% 
+  mutate(ID = reorder(ID, median)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ UL + 1000,
+    T ~ Q3 + 1000
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000, fill = ID), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("n = ", NN, ", median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = 0, size = 4, fontface = "bold") + 
+  geom_text(aes(label = grouping, y = Q3/1000), size = 4, hjust = -0.2, vjust = -0.2,
+            fontface = "bold") +
+  annotate(geom = "text", x = 1.5, y= 33, 
+           label = "NS", size = 4, fontface = "bold", hjust = -0.2) +
+  annotate(geom = "errorbarh", xmin = 1.2, xmax = 1.8, y = 33, 
+           height = 0.3, size = 1) +
+  scale_fill_manual(values = c("orangered3", "coral4"),
+                    limits = c("ovary (0hr) siRNA loci", "ovary (9hap) siRNA loci"),
+  ) +
+  scale_y_continuous(breaks = c(0, 20, 40), limits = c(0, 40)) +
+  labs(x = NULL,
+       y = "kilobases to nearest genes",
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 14, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+group1
+```
+
+#### 2 
+```{r}
+group2 <- gene_distance_zy_s %>% 
+  inner_join(gene_dist_zy_results, by = "ID") %>%  
+  filter(ID == "ovary 0hr NOT 9hap loci" |
+           ID == "ovary 9hap NOT 0hr loci") %>% 
+  mutate(ID = reorder(ID, median)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ UL + 1000,
+    T ~ Q3 + 1000
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000, fill = ID), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("n = ", NN, ", median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = 0, size = 4, fontface = "bold") +   
+  geom_text(aes(label = grouping, y = Q3/1000), size = 5, hjust = -0.2, vjust = -0.2,
+            fontface = "bold") +
+  annotate(geom = "text", x = 1.5, y= 32, 
+           label = "NS", size = 5, fontface = "bold", hjust = -0.2) +
+  annotate(geom = "errorbarh", xmin = 1.2, xmax = 1.8, y = 32, 
+           height = 0.3, size = 1) +
+  scale_fill_manual(values = c("orangered3", "coral4"),
+                    limits = c("ovary 0hr NOT 9hap loci", "ovary 9hap NOT 0hr loci"),
+  ) +
+  scale_y_continuous(breaks = c(0, 20, 40), limits = c(0, 40)) +
+  labs(x = NULL,
+       y = NULL,
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 18, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+group2
+```
+
+#### 3 
+```{r}
+group3 <- gene_distance_zy_s %>% 
+  inner_join(gene_dist_zy_results, by = "ID") %>%  
+  filter(ID == "egg siRNA loci" |
+           ID == "zygote siRNA loci") %>% 
+  mutate(ID = reorder(ID, median)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ UL + 1000,
+    T ~ Q3 + 1000
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000, fill = ID), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("n = ", NN, ", median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = 0, size = 4, fontface = "bold") +  
+  geom_text(aes(label = grouping, y = Q3/1000), size = 4, hjust = -0.2, vjust = -0.2,
+            fontface = "bold") +
+  annotate(geom = "text", x = 1.5, y= 36, 
+           label = "1.3e-13", size = 4, fontface = "bold", hjust = -0.1) +
+  annotate(geom = "errorbarh", xmin = 1.2, xmax = 1.8, y = 36, 
+           height = 0.3, size = 1) +
+  scale_fill_manual(values = c("tomato1", "violetred4"),
+                    limits = c("egg siRNA loci", "zygote siRNA loci"),
+  ) +
+  scale_y_continuous(breaks = c(0, 20, 40), limits = c(0, 40)) +
+  labs(x = NULL,
+       y = NULL,
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 14, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+group3
+```
+
+#### 4
+```{r}
+group4 <- gene_distance_zy_s %>% 
+  inner_join(gene_dist_zy_results, by = "ID") %>%  
+  filter(ID == "egg NOT zygote loci" |
+           ID == "zygote NOT egg loci") %>% 
+  mutate(ID = reorder(ID, median)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ UL + 1000,
+    T ~ Q3 + 1000
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000, fill = ID), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("n = ", NN, ", median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = 0, size = 4, fontface = "bold") + 
+  geom_text(aes(label = grouping, y = Q3/1000), size = 4, hjust = -0.2, vjust = -0.2,
+            fontface = "bold") +
+  annotate(geom = "text", x = 1.5, y= 36, 
+           label = "1e-13", size = 4, fontface = "bold", hjust = -0.1) +
+  annotate(geom = "errorbarh", xmin = 1.2, xmax = 1.8, y = 36, 
+           height = 0.3, size = 1) +
+  scale_fill_manual(values = c("tomato1", "violetred4"),
+                    limits = c("egg NOT zygote loci", "zygote NOT egg loci"),
+  ) +
+  scale_y_continuous(breaks = c(0, 20, 40), limits = c(0, 40)) +
+  labs(x = NULL,
+       y = NULL,
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 14, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+group4
+```
+
+#### 5 
+```{r}
+group5 <- gene_distance_zy_s %>% 
+  inner_join(gene_dist_zy_results, by = "ID") %>%  
+  filter(ID == "seedling siRNA loci" |
+           ID == "sperm siRNA loci" |
+           ID == "embryo siRNA loci") %>% 
+  mutate(ID2 = case_when(
+    str_detect(ID, "emb") ~ "*embryo siRNA loci",
+    T ~ ID
+  )) %>% 
+  mutate(ID = reorder(ID2, median)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ UL + 1000,
+    T ~ Q3 + 3000
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000, fill = ID), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("n = ", NN, ", median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = 0, size = 4, fontface = "bold") +  
+  geom_text(aes(label = grouping, y = Q3/1000), size = 4, hjust = -0.2, vjust = -0.2,
+            fontface = "bold") + 
+  annotate(geom = "text", x = 1.5, y= 32, 
+           label = "NS", size = 4, fontface = "bold", hjust = -0.2) +
+  annotate(geom = "errorbarh", xmin = 1.2, xmax = 1.8, y = 32, 
+           height = 0.3, size = 1) + 
+  scale_fill_manual(values = c("grey20", "seagreen", "dodgerblue2"),
+                    limits = c("*embryo siRNA loci", "seedling siRNA loci", "sperm siRNA loci"),
+  ) +
+  scale_y_continuous(breaks = c(0, 20, 40), limits = c(0, 40)) +
+  labs(x = NULL,
+       y = NULL,
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 14, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+group5
+```
+#### put them together 
+```{r}
+plot_grid(group3, group4, group5, group1, 
+          rel_heights = c(1, 1, 1.4, 1.3),
+          ncol = 1,
+          axis = "lr",
+          align = "v")
+
+ggsave("distance_near_gene_zygote.svg", width = 7.5, height = 5)
+ggsave("distance_near_gene_zygote.png", width = 7.5, height = 5) 
+```
+
+```{r}
+gene_distance_zy_s %>% 
+  mutate(ID = reorder(ID, median)) %>% 
+  # mutate(ID = fct_reorder(.f = ID, .fun = median, .x = X13)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ UL + 1000,
+    T ~ Q3 + 1000
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = 0, size = 5, fontface = "bold") + 
+  scale_y_continuous(breaks = c(0, 20, 40)) +
+  labs(x = NULL,
+       y = "kilobases to nearest gene",
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 18, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+ 
+```
+```{r}
+gene_distance_zygote %>% 
+  #mutate(ID = reorder(ID, median)) %>% 
+  mutate(ID = fct_reorder(.f = ID, .fun = median, .x = X13)) %>% 
+  ggplot(aes(x = ID, y = (X13 + 1))) +
+  #ggbeeswarm::geom_quasirandom(size = 0.2, alpha = 0.5) +
+  geom_violin() +
+  labs(x = NULL,
+       y = "kilobases to nearest gene",
+       fill = NULL,
+       color = NULL) +  
+  scale_y_log10() +
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 18, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+```
+
+# TE overlaps 
+## load data
+```{r, warning= F, message = F} 
+overlap_files <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/Bed_cov_2020_10_14/LociGeneTEcov/", 
+                            pattern = "*.cov", full.names = T)
+
+overlap_data <- sapply(overlap_files, read_delim, simplify = FALSE, 
+                       col_names = F, trim_ws = T, escape_double = FALSE, delim = "\t") %>% 
+  #sapply(mutate, Chr = as.numeric(X1), simplify = F) %>% 
+  #sapply(filter, is.na(Chr) == F, simplify = F) %>% 
+  #sapply(select, -X1, simplify = F) %>% 
+  bind_rows(.id = "id") 
+
+head(overlap_data)
+```
+```{r message=F, warning=F}
+overlap_files_fov <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/fovary_bed_cov/TE/", 
+                            pattern = "*.cov", full.names = T)
+
+overlap_data_fov <- sapply(overlap_files_fov, read_delim, simplify = FALSE, 
+                       col_names = F, trim_ws = T, escape_double = FALSE, delim = "\t") %>% 
+  bind_rows(.id = "id") 
+
+head(overlap_data_fov)
+```
+
+## sirens overlap
+```{r}
+overlap_data_siren <- overlap_data %>% 
+  rbind(overlap_data_fov) %>% 
+   filter(str_detect(id, "siren") | #5
+           str_detect(id, "egg_loci") | #1
+           str_detect(id, "sperm_loci") | #2
+           str_detect(id, "ovary_loci") | #2
+           str_detect(id, "zygote_loci") | #1
+           str_detect(id, "embryo_loci") | #1
+           str_detect(id, "seedling_loci")  #1
+           ) 
+
+overlap_data_siren <- overlap_data_siren %>% 
+  mutate(ID = case_when(
+           str_detect(id, "egg_siren") ~ "egg siren loci",   #1
+           str_detect(id, "zygote_siren") ~ "zygote siren loci",  #2
+           str_detect(id, "ovary_siren") &
+             str_detect(id, "fovary") == F ~ "ovary (0hr) siren loci", #3 
+           str_detect(id, "endo_siren") ~ "endosperm siren loci", #4 
+           str_detect(id, "egg_loci") ~ "egg siRNA loci", #5 
+           str_detect(id, "endosperm_loci") ~ "endosperm siRNA loci", #6
+           str_detect(id, "sperm_loci") & 
+             str_detect(id, "endo") == F ~ "sperm siRNA loci", #7 
+           str_detect(id, "fovary_loci") ~ "ovary (9hap) siRNA loci", #8
+           str_detect(id, "ovary_loci") &
+             str_detect(id, "fovary") == F ~ "ovary (0hr) siRNA loci", #9
+           str_detect(id, "zygote_loci") ~ "zygote siRNA loci",  #10 
+           str_detect(id, "embryo_loci") ~ "embryo siRNA loci", #11
+           str_detect(id, "seedling_loci") ~ "seedling siRNA loci", #12 
+           str_detect(id, "fovary_siren") ~ "ovary (9hap) siren loci" #13 
+  )) %>% 
+   mutate(TE = case_when(
+   str_detect(id, "TIR") ~ "TIR",     #1
+   str_detect(id, "CentO") ~ "CentO",  #2
+   str_detect(id, "Gypsy") ~ "Gypsy",  #3
+   str_detect(id, "Copia") ~ "Copia",   #4
+   str_detect(id, "LINE") ~ "LINE",    #5
+   str_detect(id, "SINE") ~ "SINE",     #6
+   str_detect(id, "CACTA") ~ "CACTA",    #7
+   str_detect(id, "Helitron") ~ "Helitron",  #8
+   str_detect(id, "genes") ~ "genes"  #9
+  ))
+
+head(overlap_data_siren)
+```
+
+
+```{r}
+overlap_data_siren_TE_s <- overlap_data_siren %>%
+  group_by(ID, TE) %>%
+  summarise(
+    NN = n(),
+    mean = mean(X7 * 100)
+  ) %>% 
+  ungroup()  
+
+head(overlap_data_siren_TE_s)
+```
+```{r}
+overlap_data_siren_TE_s %>% 
+  filter(TE == "Gypsy") %>% 
+  arrange(mean)
+```
+
+```{r}
+##total overlap
+overlap_data_siren_TE_s %>% 
+  mutate(ID = factor(ID, levels = c(
+    "endosperm siren loci",
+    "seedling siRNA loci",
+    "embryo siRNA loci",
+    "ovary (9hap) siRNA loci",
+    "ovary (0hr) siRNA loci",
+    "endosperm siRNA loci",
+    "ovary (9hap) siren loci",
+    "ovary (0hr) siren loci",
+    "zygote siRNA loci",
+    "egg siRNA loci",
+    "zygote siren loci",
+    "egg siren loci",
+    "sperm siRNA loci"
+  ))) %>%
+  mutate(type2 = case_when(
+    TE == "genes" ~ "genes",
+    T ~ "TE"
+  )) %>% 
+  #filter(TE != "genes") %>% 
+  mutate(TE = factor(TE, levels = c(
+     "genes", "Helitron", "SINE", "LINE", "TIR", "CentO", "Copia", "CACTA", "Gypsy" 
+  ))) %>% 
+  ggplot(aes(x = ID, y = mean)) +
+  geom_bar(stat = "identity", aes(fill = TE), alpha = 0.8) +
+  scale_fill_manual(values = c("grey10","indianred1", "indianred3", "indianred4", 
+                               "orange2", "skyblue2", "skyblue4", "grey70"),
+                   limits = c("genes", "Helitron", "SINE", "LINE", "TIR", "Copia", "CACTA", "Gypsy")) +
+  labs(x = NULL,
+       y = "mean fraction of locus length\noverlapped by TEs or genes (%)",
+       fill = NULL) +
+  guides(fill = guide_legend(nrow = 2)) + 
+  guides(color = F) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  theme(text = element_text(size = 18, face="bold")) +
+  theme(panel.grid.minor.y = element_blank(), 
+        panel.grid.major.y = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+ggsave("TE_overlap_stackbar.svg", height = 5, width = 7)
+ggsave("TE_overlap_stackbar.png", height = 5, width = 7)
+```
+## just siren 
+```{r}
+overlap_data_siren_TE_s %>% 
+  filter(TE == "genes") %>% 
+  filter(str_detect(ID, "siren")) %>% 
+  arrange(mean)
+```
+
+* endosperm ~30%
+* others ~15% 
+
+### stats 
+```{r}
+overlap_data_siren %>% head()
+
+model_siren_overlap <- glm(X7 ~ ID * TE, data = overlap_data_siren %>% 
+                             filter(str_detect(ID, "siren")) %>%
+                             filter(str_detect(TE, "genes|TIR|Gypsy")),
+                                    family = quasibinomial()) 
+
+anova(model_siren_overlap, test = "LRT")
+```
+```{r}
+est_siren_TE_overlap <- emmeans(model_siren_overlap, pairwise ~ ID | TE)
+multcomp::cld(est_siren_TE_overlap$emmeans, Letters = letters)
+```
+```{r}
+est_siren_TE_overlap$contrasts %>% 
+ # summary(infer = c(T, T)) %>% 
+  as.data.frame() %>% 
+  filter(TE == "genes")
+```
+
+* egg - endo: 1.5e-5 
+* endo - ov0: 2e-6
+* endo - ov9: 1.4e-4
+* endo - zygote: 8e-6 
+
+```{r}
+est_siren_TE_overlap$contrasts %>% 
+ # summary(infer = c(T, T)) %>% 
+  as.data.frame() %>% 
+  filter(TE == "Gypsy")
+```
+
+* egg - endo: 1.3e-5 
+* endo - ov0: 0.002 
+* endo - ov9: 0.022
+* endo - zygote: 3e-5 
+
+### plot
+```{r}
+overlap_data_siren_TE_s %>% 
+  filter(str_detect(ID, "siren")) %>% 
+  mutate(ID = factor(ID, levels = c(
+    "endosperm siren loci",
+    "ovary (9hap) siren loci",
+    "ovary (0hr) siren loci",
+    "zygote siren loci",
+    "egg siren loci"
+  ))) %>%
+  mutate(type2 = case_when(
+    TE == "genes" ~ "genes",
+    T ~ "TE"
+  )) %>% 
+  #filter(TE != "genes") %>% 
+  mutate(TE = factor(TE, levels = c(
+     "genes", "Helitron", "SINE", "LINE", "TIR", "CentO", "Copia", "CACTA", "Gypsy" 
+  ))) %>% 
+  ggplot(aes(x = ID, y = mean)) +
+  geom_bar(stat = "identity", aes(fill = TE), alpha = 0.8) + 
+  # annotate(geom = "errorbarh", xmin = 2.2, xmax = 2.8, y = 52, 
+  #          height = 1, size = 1) + 
+  # annotate(geom = "errorbarh", xmin = 4.2, xmax = 4.8, y = 62, 
+  #          height = 1, size = 1) +
+  # annotate(geom = "text", label = c("a", "b", "b", "c", "c"),
+  #          x = c(1, 2, 3, 4, 5),
+  #          y = c(0, 0, 0, 0, 0),
+  #          hjust = -0.1, size = 5, fontface = "bold") + 
+  annotate(geom = "text", label = c("b", "a", "a", "a", "a"),
+           x = c(1, 2, 3, 4, 5),
+           y = c(30, 40, 40, 50, 50),
+           hjust = -0.1, size = 5, fontface = "bold", color = "grey90") +
+  scale_fill_manual(values = c("grey10","indianred1", "indianred3", "indianred4", 
+                               "orange2", "skyblue2", "skyblue4", "grey70"),
+                   limits = c("genes", "Helitron", "SINE", "LINE", "TIR", "Copia", "CACTA", "Gypsy")) +
+  scale_y_continuous(limits = c(0, 75)) +
+  labs(x = NULL,
+       y = "mean fraction of locus length\noverlapped by TEs or genes (%)",
+       fill = NULL) +
+  guides(fill = guide_legend(nrow = 2)) + 
+  guides(color = F) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  theme(text = element_text(size = 14, face="bold")) +
+  theme(panel.grid.minor.y = element_blank(), 
+        panel.grid.major.y = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+ggsave("TE_overlap_stackbar_siren.svg", height = 3.5, width = 7)
+ggsave("TE_overlap_stackbar_siren.png", height = 3.5, width = 7)
+```
+
+# Gypsy overlap vs not Gypsy overlap on sirens
+```{r}
+siren_gypsy <- overlap_data_siren %>% 
+  filter(TE == "Gypsy") %>% 
+  filter(str_detect(ID, "siren")) %>% 
+  rename(Chr = X1,
+         start = X2,
+         end = X3)
+
+head(siren_gypsy)
+```
+
+```{r, warning = F, message=F} 
+ovary_siren_loci <- read_csv("ovary_siren_loci.csv")
+egg_siren_loci <- read_csv("egg_siren_loci.csv")
+zygote_siren_loci <- read_csv("zygote_siren_loci.csv")
+fovary_siren_loci <- read_csv("fovary_siren_loci.csv")
+
+siren_ov_e_z <- rbind(ovary_siren_loci, egg_siren_loci, zygote_siren_loci, fovary_siren_loci)
+head(siren_ov_e_z)
+```
+
+```{r}
+siren_gypsy2 <- siren_gypsy %>% 
+  right_join(siren_ov_e_z, by = c("Chr", "start", "end")) %>% 
+  mutate(overlap = case_when(
+    X7 > 0.33 ~ "Y",
+    T ~ "N"
+  ))
+
+head(siren_gypsy2)
+```
+
+## stat 
+```{r}
+summary(siren_gypsy2$sample_type %>% 
+          as.factor())
+```
+
+```{r}
+model_siren_gypsy <- lm(log10(RPKM) ~ overlap * sample_type, siren_gypsy2)
+anova(model_siren_gypsy)
+```
+
+```{r}
+est_siren_gyspy <- emmeans(model_siren_gypsy, pairwise ~ overlap | sample_type)
+
+siren_gyspy.P <- est_siren_gyspy$contrasts %>% 
+  as.data.frame()
+
+siren_gyspy.P
+```
+
+```{r}
+siren_gypsy_s <- siren_gypsy2 %>% 
+  group_by(overlap, sample_type) %>% 
+  summarise(
+     NN = n(),
+     median = median(RPKM),
+     Q3 = quantile(RPKM, 0.75),
+     Q1 = quantile(RPKM, 0.25),
+     UL = quantile(RPKM, 0.975),
+     LL = quantile(RPKM, 0.025),
+     mean = mean(RPKM)
+  )
+
+siren_gypsy_s
+```
+## plot 
+```{r}
+siren_gypsy_s %>% 
+  mutate(overlap2 = case_when(
+    overlap == "Y" ~ ">= 33% of\nlocus length\noverlap Gypsy",
+    T ~ "< 33% of\nlocus length\noverlap Gypsy"
+  )) %>% 
+  ggplot(aes(x = overlap2)) +
+  facet_grid(. ~ sample_type) + 
+  geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median), width = 0.3, alpha = 0.8) +
+  geom_segment(aes(x = overlap2, xend = overlap2,  y = Q3, yend = UL)) +
+  geom_segment(aes(x = overlap2, xend = overlap2,  y = Q1, yend = LL)) +
+  geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.1, size = 1) +
+  geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.1, size = 1) + 
+  geom_text(aes(label = paste(
+    "n = ", NN, sep = ""
+  ), y = Q1), size = 3, fontface = "bold", vjust = -2, hjust = 0) +
+  geom_text(data = siren_gyspy.P %>% 
+              mutate(overlap2 = "< 33% of\nlocus length\noverlap Gypsy") %>% 
+              mutate(y = 500), 
+            aes(label = paste("P = ", signif(p.value, 2), sep = ""), 
+                y = y, vjust = -5), 
+            size = 3, fontface = "bold") +
+  scale_y_log10(breaks = c(100, 1000)) +
+  #scale_x_discrete(label = NULL) +
+  labs(y = "RPKM at siren loci",
+       x = NULL,
+       fill = NULL) +
+  theme_minimal() +
+  theme(
+    axis.line = element_line(size = 1.2),
+    text = element_text(size = 14, color = "black", face = "bold"),
+    axis.text = element_text(color = "black", face = "bold"),
+    axis.text.y = element_text(hjust = 0.5),
+    panel.grid = element_blank(),
+    legend.position = "bottom",
+    strip.placement = "outside",
+    legend.direction = "vertical"
+    )  +
+  coord_flip() 
+
+ggsave("siren_gypsy.svg", height = 3, width = 7.5)
+ggsave("siren_gypsy.png", height = 3, width = 7.5)
+```
+

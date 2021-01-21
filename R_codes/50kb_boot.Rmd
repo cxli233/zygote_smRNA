@@ -1,0 +1,257 @@
+---
+title: "Bootstrapping_50kb_dist"
+author: "Chenxin Li"
+date: "12/2/2020"
+output:  
+  html_notebook:
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+  html_document:
+    toc: yes 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(readr)
+library(readxl)
+library(emmeans)
+library(RColorBrewer)
+library(viridis)
+library(stringr)
+library(svglite)
+library(cowplot)
+library(forcats)
+library(boot)
+```
+
+# data 
+```{r message=F}
+bin50_list <- list.files("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/Bed_cov_2020_10_14/50KbLociCov/", 
+                             pattern = "*.cov", full.names = T)
+
+bin50_data <- sapply(bin50_list, read_delim, simplify = FALSE, col_names = F, delim = "\t") %>% 
+  bind_rows(.id = "id")
+
+head(bin50_data)
+```
+```{r}
+gene.density <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/50KB_windows/MSU7_filtered_genes_50Kb.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)
+
+MSU7_filtered_genes <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/MSU7_filtered_genes.gff", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE)  
+
+total_genes <- MSU7_filtered_genes %>% nrow()
+```
+```{r}
+TIR <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/50KbWindowsCov/home/gent/references/Oryza_sativa.IRGSP-1.non-CACTA_DNA.out.gff.50KbWindows.cov", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE) 
+
+TIR_bed <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/tir.bed", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE) 
+
+total_TIR <- TIR_bed %>% nrow() 
+```
+```{r message = F}
+bed_list <- list.files("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/Bed_cov_2020_10_14/LociBedFiles/", 
+                             pattern = "*.bed", full.names = T)
+
+beds <- sapply(bed_list, read_delim, simplify = FALSE, delim = "\t", escape_double = FALSE, col_names = FALSE, 
+    trim_ws = TRUE) %>% 
+ sapply(mutate, X1 = as.numeric(X1), simplify = F) %>% 
+ sapply(mutate, X2 = as.numeric(X2), simplify = F) %>%
+ sapply(mutate, X3 = as.numeric(X3), simplify = F) %>%
+ bind_rows(.id = "id")  
+
+head(beds)
+```
+# keying data
+```{r}
+beds_total <- beds %>% 
+  group_by(id) %>% 
+  count() %>% 
+  mutate(locus = case_when(
+    str_detect(id, "egg_loci.bed") ~ "egg siRNA loci", #1
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci", #2
+    str_detect(id, "embryo_loci") ~ "embryo siRNA loci", #3 
+    str_detect(id, "zygote-egg_complement_loci.") ~ "zygote NOT egg", #4
+    str_detect(id, "zygote-egg_intersect") ~ "zygote/egg intersect",  #5
+    str_detect(id, "sperm_loci") &
+      str_detect(id, "endo") == F ~ "sperm siRNA loci", #6 
+    str_detect(id, "egg-zygote_complement_loci.bed") ~ "egg NOT zygote", #7 
+    str_detect(id, "endosperm_loci.bed") ~ "endosperm siRNA loci", #8
+    str_detect(id, "zygote_loci.bed") ~ "zygote siRNA loci" ,#9
+    str_detect(id, "ovary_loci") ~ "ovary (0hr) loci", #10
+  )) %>% 
+  filter(is.na(locus) == F) %>% 
+  ungroup() %>% 
+  select(-id) %>% 
+  rbind(
+    data.frame(n = c(total_genes, 479930, total_TIR,
+                     38267, 19798, 14397),
+               locus = c("genes", "embryo DMR2 target loci", "TIR",
+                         "ovary (9hap) loci", "ovary 9hap NOT 0hr loci", "ovary 0hr NOT 9hap loci"))
+  )
+
+beds_total
+```
+```{r}
+bin50_data_select <- bin50_data %>% 
+  rbind(gene.density %>% 
+          mutate(id = "genes")) %>% 
+  rbind(TIR %>% 
+          mutate(id = "TIR")) %>% 
+  rename(Chr = X1,
+         start = X4,
+         end = X5,
+         count = X9,
+         bases = X10, 
+         coverage = X12) %>%  
+  mutate(locus = case_when(
+    str_detect(id, "egg_loci.bed") ~ "egg siRNA loci", #1
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci", #2
+    str_detect(id, "embryo_loci") ~ "embryo siRNA loci", #3 
+    str_detect(id, "zygote-egg_complement_loci.") ~ "zygote NOT egg", #4
+    str_detect(id, "zygote-egg_intersect") ~ "zygote/egg intersect",  #5
+    str_detect(id, "sperm_loci") &
+      str_detect(id, "endo") == F ~ "sperm siRNA loci", #6 
+    str_detect(id, "egg-zygote_complement_loci.") ~ "egg NOT zygote", #7 
+    str_detect(id, "endosperm_loci.bed") ~ "endosperm siRNA loci", #8
+    str_detect(id, "genes") ~ "genes", #9
+    str_detect(id, "CHH_wt-52_dmr100_hypo") ~ "embryo DMR2 target loci", #10
+    str_detect(id, "zygote_loci.bed") ~ "zygote siRNA loci", #11
+    str_detect(id, "Gypsy") ~ "Gypsy", #12
+    str_detect(id, "fovary_loci.bed") ~ "ovary (9hap) loci", #13
+    str_detect(id, "fovary-ovary") ~ "ovary 9hap NOT 0hr loci", #14
+    str_detect(id, "ovary-fovary") ~ "ovary 0hr NOT 9hap loci", #15
+    str_detect(id, ".ovary_loci") ~ "ovary (0hr) loci", #16
+    str_detect(id, "TIR") ~ "TIR" #17
+  )) %>% 
+  filter(is.na(locus) == F) %>% 
+  inner_join(beds_total, by = "locus") %>% 
+  mutate(proportion = count/n)
+
+head(bin50_data_select)
+```
+
+```{r}
+bin50_data_select_wide <- bin50_data_select %>% 
+  filter(str_detect(id, "endosperm") == F) %>% 
+  filter(str_detect(id, "Gypsy") == F) %>% 
+  filter(str_detect(id, "ovary") == F) %>% 
+  #filter(locus != "ovary (0hr) loci") %>%
+  #filter(locus != "ovary (9hap) loci") %>%
+  select(Chr, start, end, locus, proportion) %>% 
+  spread(locus, proportion)
+
+head(bin50_data_select_wide) 
+```
+
+# function 
+dist(bin50_data_select_wide[, 4:ncol(bin50_data_select_wide)] %>% t())
+
+bin50_data_select_wide[, 4:ncol(bin50_data_select_wide)] %>% 
+  sample_n(n(), replace = T) %>%
+  as.matrix() 
+
+
+```{r}
+resample <- function(df){
+  df %>% 
+    sample_n(n(), replace = T) %>% 
+    as.matrix() %>% 
+    t() %>% 
+    dist(method = "e") %>% 
+    as.matrix() 
+    
+}
+
+resample(bin50_data_select_wide[, 4:ncol(bin50_data_select_wide)]) %>% 
+  as.data.frame()
+```
+
+# bootstrapping 
+## zygote NOT egg 
+```{r}
+resample(bin50_data_select_wide[, 4:ncol(bin50_data_select_wide)])[,9]
+```
+
+```{r}
+result_zne <- replicate(resample(bin50_data_select_wide[, 4:ncol(bin50_data_select_wide)])[,9], 
+                        n = 1000) %>% 
+  as.data.frame() %>% 
+  mutate(compare_to = row.names(.)) %>% 
+  gather("interaction", "dist", 1:1000)
+
+result_zne %>% head()
+```
+## TIR
+```{r}
+resample(bin50_data_select_wide[, 4:ncol(bin50_data_select_wide)])[,8]
+```
+
+```{r}
+result_TIR <- replicate(resample(bin50_data_select_wide[, 4:ncol(bin50_data_select_wide)])[,8], 
+                        n = 1000) %>% 
+  as.data.frame() %>% 
+  mutate(compare_to = row.names(.)) %>% 
+  gather("interaction", "dist", 1:1000)
+
+result_TIR %>% head()
+```
+
+# stat
+```{r}
+result_zne %>% 
+ # filter(compare_to == "egg NOT zygote" |
+#           compare_to == "embryo DMR2 target loci") %>% 
+  group_by(compare_to) %>% 
+  summarise(min = min(dist),
+            mean = mean(dist),
+            max = max(dist))
+```
+
+```{r}
+result_zne %>% 
+  filter(compare_to == "embryo DRM2 target loci") %>% 
+  filter(dist > 0.01146) %>% 
+  nrow()
+```
+
+```{r}
+result_zne %>% 
+  filter(compare_to == "embryo siRNA loci") %>% 
+  filter(dist > 0.008267116	) %>% 
+  nrow()
+```
+
+
+
+
+
+
+# plot 
+ 
+```{r}
+ result_zne %>% 
+  filter(compare_to != "zygote NOT egg") %>% 
+  mutate(compare_to = fct_reorder(.f = compare_to, .x = dist, .fun = mean)) %>% 
+  ggplot(aes(y = dist, x = compare_to)) +
+  geom_violin() +
+  labs(y = "Euclidean distance to\nzygote NOT egg loci",
+       x = NULL) +
+  theme(axis.text.y = element_text(hjust = 0.5)) +
+  coord_flip()
+```
+
