@@ -33,7 +33,7 @@ library(cowplot)
 
  
 ```{r warning=F, message=F}
-meth_egg_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/siRNA_meths_2021_01_06/egg_select2/", 
+meth_egg_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/MTRsFullSet3/egg_siren/", 
                         pattern = "*.mtr", full.names = T) 
 
 meth_egg_data <- sapply(meth_egg_list, read_delim, simplify = FALSE, 
@@ -45,7 +45,7 @@ head(meth_egg_data)
  
 ## zygote 
 ```{r warning=F, message=F}
-meth_zy_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/zygote_siRNA_loci_meth/zygote_loci_select/", 
+meth_zy_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/MTRsFullSet3/zygote_siren/", 
                         pattern = "*.mtr", full.names = T) 
 
 meth_zy_data <- sapply(meth_zy_list, read_delim, simplify = FALSE, 
@@ -57,7 +57,7 @@ head(meth_zy_data)
  
 ## endosperm
 ```{r warning=F, message=F}
-meth_en_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/endisperm_siRNA_loci_meth/endo_loci_select/", 
+meth_en_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/MTRsFullSet3/endo_siren/", 
                         pattern = "*.mtr", full.names = T) 
 
 meth_en_data <- sapply(meth_en_list, read_delim, simplify = FALSE, 
@@ -68,7 +68,7 @@ head(meth_en_data)
 ```
 ## ovary
 ```{r message=F, warning= F}
-meth_ov_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/ovary_siRNA_loci_meth/ovary_select/", 
+meth_ov_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/MTRsFullSet3/ov_siren/", 
                         pattern = "*.mtr", full.names = T) 
 
 meth_ov_data <- sapply(meth_ov_list, read_delim, simplify = FALSE, 
@@ -77,17 +77,7 @@ meth_ov_data <- sapply(meth_ov_list, read_delim, simplify = FALSE,
 
 head(meth_ov_data)
 ```
-## seedling 
-```{r message=F}
-meth_sd_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/seedling_siRNA_loci_meth/seedling_select/", 
-                        pattern = "*.mtr", full.names = T) 
-
-meth_sd_data <- sapply(meth_sd_list, read_delim, simplify = FALSE, 
-                       delim = "\t", col_names = F, escape_double = F, trim_ws = T) %>% 
-  bind_rows(.id = "id")
-
-head(meth_sd_data)
-```
+ 
 
 
 ## the siren loci
@@ -104,68 +94,19 @@ head(zygote_siren)
 ```
 
 # keying data
-## seedling 
-```{r}
-meth_sd_data_nice <- meth_sd_data %>% 
-  filter(X7 >= 3) %>% 
-  mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>%  
-  mutate(category = "seedling siRNA loci") %>%
-  mutate(context = case_when(
-    str_detect(id, "gz.CG.") ~ "mCG", 
-    str_detect(id, "gz.CHG.") ~ "mCHG", 
-    str_detect(id, "gz.CHH.") ~ "mCHH"
-  )) %>% 
-  mutate(sample_ID = case_when(
-    str_detect(id, "egg100_1") ~ "egg_1", 
-    str_detect(id, "egg100_2") ~ "egg_2",
-    str_detect(id, "SRR50") ~ "egg (Park et al)",
-    T ~ substr(id, start = 113, stop = 117)
-  )) %>% 
-  mutate(genotype = case_when(
-    str_detect(id, "52_") ~ "drm2",
-    str_detect(id, "wt") ~ "WT",
-    T ~ "WT"
-  )) %>% 
-  mutate(tissue =case_when(
-   str_detect(id, "em_") ~ "embryo",
-   str_detect(id, "en_") ~ "endosperm",
-   str_detect(id, "ov") ~ "ovary",
-   T ~ "egg"
-  ))
-
-head(meth_sd_data_nice)
-```
-```{r}
-meth_sd_data_nice %>% 
-  group_by(context, sample_ID, tissue, genotype, category) %>% 
-  tally()
-```
-
-```{r}
-sd_in_egg <- meth_sd_data_nice %>% 
-  filter(tissue == "egg") %>% 
-  select(-genotype, -tissue)
-
-sd_in_ov <- meth_sd_data_nice %>% 
-  filter(tissue == "ovary") 
-
-sd_in_em <- meth_sd_data_nice %>% 
-  filter(tissue == "embryo") 
-
-sd_in_en <- meth_sd_data_nice %>% 
-  filter(tissue == "endosperm") 
-```
-
-
+ 
 ## egg
 ```{r}
 meth_egg_data_nice <- meth_egg_data %>% 
   filter(X7 >= 3) %>% 
   mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>% 
   mutate(category = case_when(
-    tag %in% egg_siren$`#Locus` ~ "egg siren loci",
-    tag %in% egg_siren$`#Locus` == F ~ "egg siRNA NOT siren loci"
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+    str_detect(id, "egg_siren_loci.mtr") ~ "egg siren loci",
+    str_detect(id, "egg_loci") & 
+      tag %in% egg_siren$`#Locus` == F ~ "egg siRNA NOT siren loci"
   )) %>% 
+  filter(is.na(category) == F) %>% 
    mutate(sample_ID = case_when(
      str_detect(id, "egg100_1") ~ "egg_1", 
      str_detect(id, "egg100_2") ~ "egg_2",
@@ -175,8 +116,7 @@ meth_egg_data_nice <- meth_egg_data %>%
     str_detect(id, "gz.CG.") ~ "mCG", 
     str_detect(id, "gz.CHG.") ~ "mCHG", 
     str_detect(id, "gz.CHH.") ~ "mCHH"
-  )) %>% 
-  rbind(sd_in_egg) 
+  ))   
 
 head(meth_egg_data_nice)
 ```
@@ -189,14 +129,24 @@ meth_egg_data_nice %>%
  
 ## endosperm
 ```{r}
+meth_en_data %>% 
+  head()
+
+str_length("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/MTRsFullSet3/endo_siren/")
+```
+
+```{r}
 meth_en_data_nice <- meth_en_data %>% 
   filter(X7 >= 3) %>% 
   mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>% 
   mutate(category = case_when(
-    tag %in% endo_siren$`#Locus` ~ "endosperm siren loci",
-    tag %in% endo_siren$`#Locus` == F ~ "endosperm siRNA NOT siren loci"
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+    str_detect(id, "endo_siren_loci.mtr") ~ "endosperm siren loci",
+    str_detect(id, "endosperm_loci") & 
+      tag %in% endo_siren$`#Locus` == F ~ "endosperm siRNA NOT siren loci"
   )) %>% 
-   mutate(sample_ID = str_sub(id, start = 115, end = 119)) %>% 
+  filter(is.na(category) == F) %>% 
+   mutate(sample_ID = str_sub(id, start = 96, end = 100)) %>% 
    mutate(context = case_when(
     str_detect(id, "gz.CG.") ~ "mCG", 
     str_detect(id, "gz.CHG.") ~ "mCHG", 
@@ -207,8 +157,7 @@ meth_en_data_nice <- meth_en_data %>%
     str_detect(id, "52_") ~ "drm2",
     str_detect(sample_ID, "wt") ~ "WT",
     T ~ "WT"
-  )) %>% 
-  rbind(sd_in_en) 
+  ))  
 ```
 
 ```{r}
@@ -217,16 +166,26 @@ meth_en_data_nice %>%
   tally()
 ```
 
-##zygote
+## zygote
+```{r}
+meth_zy_data %>% 
+  head()
+
+str_length("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/MTRsFullSet3/zygote_siren/")
+```
+
 ```{r}
 meth_zy_data_nice <- meth_zy_data %>% 
   filter(X7 >= 3) %>% 
   mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>% 
-  mutate(category = case_when(
-    tag %in% zygote_siren$`#Locus` ~ "zygote siren loci",
-    tag %in% zygote_siren$`#Locus` == F ~ "zygote siRNA NOT siren loci"
+   mutate(category = case_when(
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+    str_detect(id, "zygote_siren_loci.mtr") ~ "zygote siren loci",
+    str_detect(id, "zygote_loci") & 
+      tag %in% zygote_siren$`#Locus` == F ~ "zygote siRNA NOT siren loci"
   )) %>% 
-   mutate(sample_ID = str_sub(id, start = 114, end = 118)) %>% 
+  filter(is.na(category) == F) %>%
+   mutate(sample_ID = str_sub(id, start = 98, end = 98+4)) %>% 
    mutate(context = case_when(
     str_detect(id, "gz.CG.") ~ "mCG", 
     str_detect(id, "gz.CHG.") ~ "mCHG", 
@@ -237,8 +196,7 @@ meth_zy_data_nice <- meth_zy_data %>%
     str_detect(id, "52_") ~ "drm2",
     str_detect(sample_ID, "wt") ~ "WT",
     T ~ "WT"
-  )) %>% 
-  rbind(sd_in_em)
+  ))  
 ```
 
 ```{r}
@@ -249,22 +207,31 @@ meth_zy_data_nice %>%
 
 ## ovary 
 ```{r}
+meth_ov_data %>% 
+  head()
+
+str_length("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/MTRsFullSet3/ov_siren/")
+```
+
+```{r}
 meth_ov_data_nice <- meth_ov_data %>% 
   filter(X7 >= 3) %>% 
   mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>% 
   mutate(category = case_when(
-    tag %in% ovary_siren$`#Locus` ~ "ovary siren loci",
-    tag %in% ovary_siren$`#Locus` == F ~ "ovary siRNA NOT siren loci"
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+    str_detect(id, "ovary_siren_loci.mtr") ~ "ovary siren loci",
+    str_detect(id, "ovary_loci") & 
+      tag %in% ovary_siren$`#Locus` == F ~ "ovary siRNA NOT siren loci"
   )) %>% 
-   mutate(sample_ID = str_sub(id, start = 107, end = 111)) %>% 
+  filter(is.na(category) == F) %>%
+   mutate(sample_ID = str_sub(id, start = 94, end = 96)) %>% 
    mutate(context = case_when(
     str_detect(id, "gz.CG.") ~ "mCG", 
     str_detect(id, "gz.CHG.") ~ "mCHG", 
     str_detect(id, "gz.CHH.") ~ "mCHH"
   )) %>% 
   mutate(tissue = "ovary") %>% 
-  mutate(genotype = "WT") %>% 
-  rbind(sd_in_ov)
+  mutate(genotype = "WT")  
 ```
  
 ```{r}
@@ -370,8 +337,6 @@ logistic <- function(x){
 ```{r}
 model_egg <- glm(X4 ~ context * sample_ID * category, data = meth_egg_data_nice, 
                  family = quasibinomial(link = "logit")) 
-
-anova(model_egg, test = "LRT")
 ```
 
 ```{r}
@@ -394,8 +359,6 @@ egg_results %>%
 ```{r}
 model_ov <- glm(meth ~ context * category, data = meth_ov_data_nice_s, 
                  family = quasibinomial(link = "logit")) 
-
-anova(model_ov, test = "LRT")
 ```
 
 ```{r}
@@ -416,8 +379,6 @@ ov_contrasts
 model_em <- glm(meth ~ context * genotype * category, 
                    data = meth_zy_data_nice_s, 
                  family = quasibinomial(link = "logit")) 
-
-anova(model_em, test = "LRT")
 ```
 ```{r}
 est_em <- emmeans(model_em, pairwise ~ category | context | genotype)
@@ -567,7 +528,7 @@ em_plot <- meth_zy_data_nice_ss %>%
   geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.3, size = 1) + 
   geom_text(aes(label = grouping, y = pos, hjust = hjust), 
             vjust = -0.2, size = 4, fontface = "bold") +
-  scale_fill_manual(values = c("violetred2", "grey20", "seagreen"),
+  scale_fill_manual(values = c("violetred4", "grey20", "seagreen"),
                     limits = c("zygote siren loci", 
                                "zygote siRNA NOT siren loci", 
                                "seedling siRNA loci")) + 

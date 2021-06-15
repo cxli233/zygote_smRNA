@@ -91,7 +91,7 @@ head(zygote)
 ```{r}
 clean <- function(df){
   df %>% 
-    filter(RPM > 2) %>%  #larger than 2 RPM
+    #filter(RPM > 2) %>%  #larger than 2 RPM
     filter(DicerCall == "24") %>%  #24nt siRNA 
     mutate(RPKM = RPM/Length * 1000) %>% 
     separate(`#Locus`, c("Chr", "Start_End"), sep = ":", remove = F) %>% 
@@ -148,7 +148,23 @@ siRNA_24_loci <- rbind(egg1, ovary1, seedling1, sperm1, zygote1, endo.1, embryo1
   
 head(siRNA_24_loci)
 ```
+```{r}
+siRNA_24_loci %>% 
+  group_by(sample_type) %>% 
+  summarise(total.reads = sum(Reads),
+            total.24 = sum(`24`)) %>% 
+  mutate(reads_captured = total.24 / (0.6*3.5*10^6))
+```
 
+```{r}
+siRNA_24_loci %>% 
+  mutate(RPM2 = case_when(
+    RPM > 2 ~ "Y",
+    T ~ "N"
+  )) %>% 
+  group_by(sample_type, RPM2) %>% 
+  count()
+```
 
 # cumulative distribution
 ```{r}
@@ -167,14 +183,14 @@ head(siRNA_24_loci_cummu)
 ```{r}
 siren <- siRNA_24_loci_cummu %>% 
   filter(sample_type == "ovary") %>% 
-  filter(perc_cum_reads <= 75)  
+  filter(perc_cum_reads <= 60)  
 
 head(siren)
 ``` 
 ```{r}
 siren_9hap <- siRNA_24_loci_cummu %>% 
   filter(sample_type == "ovary_9hap") %>% 
-  filter(perc_cum_reads <= 75)  
+  filter(perc_cum_reads <= 60)  
 
 head(siren_9hap)
 ```
@@ -191,7 +207,7 @@ total
 ```{r}
 x_label <- siRNA_24_loci_cummu %>% 
   group_by(sample_type) %>% 
-  filter(perc_cum_reads <= 75) %>% 
+  filter(perc_cum_reads <= 60) %>% 
   count() %>% 
   full_join(total, by = "sample_type") %>% 
   mutate(rank = n/`.`) 
@@ -203,7 +219,7 @@ x_label
 set.seed(666) 
 siRNA_24_loci_cummu %>%
   group_by(sample_type) %>% 
-  sample_n(2000) %>% 
+  sample_n(4000) %>% 
   ungroup() %>% 
   mutate(sample_type2 = case_when(
     str_detect(sample_type, "9hap") ~ "ovary (9hap)",
@@ -214,7 +230,7 @@ siRNA_24_loci_cummu %>%
   geom_vline(xintercept = 0, size = 1) +
   geom_hline(yintercept = 0, size = 1) +
   geom_line(aes(color = sample_type2, group = sample_type2), size = 1.25, alpha = 0.8) +
-  geom_hline(yintercept = 75, linetype = 2, color = "black", size = 1.1) +
+  geom_hline(yintercept = 60, linetype = 2, color = "black", size = 1.1) +
   scale_color_manual(values = c("orangered3", 
                                 "tomato1", "seagreen", "dodgerblue2", "coral4",
                                 "violetred4", "grey20", "lightgoldenrod4"),
@@ -240,7 +256,7 @@ ggsave("minus_miR.svg", width = 5, height = 5)
 ```{r}
 endo_siren <- siRNA_24_loci_cummu %>% 
   filter(sample_type == "endosperm") %>% 
-  filter(perc_cum_reads <= 75) 
+  filter(perc_cum_reads <= 60) 
 
 head(endo_siren)
 ```
@@ -248,16 +264,22 @@ head(endo_siren)
 ```{r}
 egg_siren <- siRNA_24_loci_cummu %>% 
   filter(sample_type == "egg") %>% 
-  filter(perc_cum_reads <= 75) 
+  filter(perc_cum_reads <= 60) 
 
 zygote_siren <- siRNA_24_loci_cummu %>% 
   filter(sample_type == "zygote") %>% 
-  filter(perc_cum_reads <= 75)
+  filter(perc_cum_reads <=  60)
 ```
 
 ```{r}
 nrow(egg_siren)
 nrow(zygote_siren)
+```
+```{r}
+egg_loci_not_siren <- egg1 %>% 
+  filter(`#Locus` %in% egg_siren$`#Locus` == F)
+
+nrow(egg_loci_not_siren)
 ```
 
 # write data
@@ -302,6 +324,7 @@ write_delim(endo_siren[, c(2:4)] %>%
 
 
 write_delim(egg1[, c(2:4)], "egg_loci.bed", delim = "\t", col_names = F)
+write_delim(egg_loci_not_siren[, c(2:4)], "egg_loci_NOT_siren.bed", delim = "\t", col_names = F)
 write_delim(ovary1[, c(2:4)], "ovary_loci.bed", delim = "\t", col_names = F)
 write_delim(fovary1[, c(2:4)], "fovary_loci.bed", delim = "\t", col_names = F)
 write_delim(sperm1[, c(2:4)], "sperm_loci.bed", delim = "\t", col_names = F)
@@ -311,8 +334,66 @@ write_delim(embryo1[, c(2:4)], "embryo_loci.bed", delim = "\t", col_names = F)
 write_delim(zygote1[, c(2:4)], "zygote_siRNA_loci.bed", delim = "\t", col_names = F)
 ```
 
+# NOT siren versions 
+## load files coming out from bedtools intersect
+```{r message=F}
+bed.list <- list.files("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/ssl_24_bed/", pattern = "*.bed", full.names = T)
 
-# length distribution
+bed.data <- sapply(bed.list, read_delim, simplify = FALSE, col_names = F, delim = "\t") %>% 
+  bind_rows(.id = "id")
+
+head(bed.data)
+```
+```{r}
+zygote_NOT_egg <- bed.data %>% 
+  filter(str_detect(id, "zygote-egg_com")) %>% 
+  mutate(locus = paste(X1, X2, X3, sep = "-"))
+
+egg_NOT_zygote <- bed.data %>% 
+  filter(str_detect(id, "egg-zygote_com")) %>% 
+  mutate(locus = paste(X1, X2, X3, sep = "-"))
+
+zygote_egg_intersect <- bed.data %>% 
+  filter(str_detect(id, "zygote-egg_intersect")) %>% 
+  mutate(locus = paste(X1, X2, X3, sep = "-"))
+
+zygote_egg_siren <- bed.data %>% 
+  filter(str_detect(id, "-egg_siren"))%>% 
+  mutate(locus = paste(X1, X2, X3, sep = "-"))
+```
+
+```{r}
+egg_siren2 <- egg_siren %>% 
+  mutate(locus = paste(Chr, start, end, sep = "-"))
+```
+
+ 
+```{r}
+write_delim(zygote1 %>% 
+              mutate(locus = paste(Chr, start, end, sep = "-")) %>% 
+              filter(locus %in% zygote_egg_siren$locus == F) %>% 
+              select(Chr, start, end),
+            file = "zygote_loci_NOT_siren.bed", delim = "\t", col_names = F)
+
+write_delim(zygote_egg_intersect %>% 
+              filter(locus %in% zygote_egg_siren$locus == F) %>%
+              select(X1, X2, X3),
+            file = "zygote_egg_intersect_NOT_siren.bed", delim = "\t", col_names = F) 
+
+write_delim(zygote_NOT_egg %>% 
+              filter(locus %in% zygote_egg_siren$locus == F) %>%
+              select(X1, X2, X3),
+            file = "zygote_NOT_egg_NOT_siren.bed", delim = "\t", col_names = F) 
+
+write_delim(egg_NOT_zygote %>% 
+              filter(locus %in% egg_siren2$locus == F) %>% 
+              select(X1, X2, X3),
+            file = "egg_NOT_zygote_NOT_siren.bed", delim = "\t", col_names = F)
+```
+
+
+
+# locus length distribution
 ```{r}
 head(siren)
 head(siRNA_24_loci_cummu)
@@ -500,4 +581,6 @@ est_RPKM$contrasts %>% as.data.frame()
 ```
 
  
+ 
 
+ 

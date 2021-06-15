@@ -35,7 +35,7 @@ read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS
     
     
 ```{r message=F, warning = F}
-em_meth_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/drm2_ATCGmaps/", 
+em_meth_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/full_set_mtrs_2021_04_12/embryo_mtrs_for_real/embryo_select/", 
                         pattern = "*.mtr", full.names = T) 
 
 em_meth_data <- sapply(em_meth_list, read_delim, simplify = FALSE, 
@@ -44,12 +44,22 @@ em_meth_data <- sapply(em_meth_list, read_delim, simplify = FALSE,
 
 head(em_meth_data) 
 ```
+```{r}
+em_meth_data %>% 
+  group_by(id) %>% 
+  count()
+```
+ 
 
 # keying data 
 
 each locus must have 3 or more reads to be considered in the analyses 
 ```{r}
-em_meth_data_nice <- em_meth_data %>% 
+set.seed(666)
+em_meth_data_nice <- em_meth_data %>%
+  group_by(id) %>% 
+  sample_n(10000) %>% 
+  ungroup() %>% 
   filter(X7 >= 3) %>% 
    mutate(sample_ID = case_when(
     str_detect(id, "52_38") ~ "drm2_38", 
@@ -64,14 +74,12 @@ em_meth_data_nice <- em_meth_data %>%
     str_detect(id, "egg_loci") ~ "egg siRNA loci", #1
     str_detect(id, "seedling_loci") ~ "seedling siRNA loci", #2
     str_detect(id, "embryo_loci") ~ "embryo siRNA loci", #3 
-    str_detect(id, "zygote-egg_complement_loci.") ~ "zygote NOT egg", #4
-    str_detect(id, "zygote-egg_intersect") ~ "zygote/egg intersect",  #5
+    str_detect(id, "zygote-egg_complement_loci.") ~ "Z loci - E loci", #4
+    str_detect(id, "zygote-egg_intersect") ~ "Z/E loci intersect",  #5
     str_detect(id, "sperm_loci") &
       str_detect(id, "endo") == F ~ "sperm siRNA loci", #6 
-    str_detect(id, "egg-zygote_complement_loci.") ~ "egg NOT zygote", #7 
-    str_detect(id, "endosperm_loci.") ~ "endosperm siRNA loci", #8
-    str_detect(id, "zygote_loci.") ~ "zygote siRNA loci", #9
-    str_detect(id, "egg_siren") ~ "egg siren loci" #10 
+    str_detect(id, "egg-zygote_complement_loci.") ~ "E loci - Z loci", #7 
+    str_detect(id, "zygote_loci.") ~ "zygote siRNA loci" #8
   )) %>% 
   filter(is.na(locus) == F) %>% 
   mutate(context = case_when(
@@ -87,8 +95,14 @@ em_meth_data_nice <- em_meth_data %>%
 head(em_meth_data_nice)
 ```
  
+ 
 
 # stats
+```{r}
+em_meth_data_nice %>% 
+  group_by(locus, context) %>% 
+  count()
+```
 
 ```{r}
 em_meth_data_nice %>% 
@@ -126,10 +140,14 @@ em_meth_data_ss
 ```{r}
 em_meth_data_ss %>% 
   filter(context == "mCHH") %>% 
-  filter(genotype == "drm2")
+  filter(genotype == "WT") %>% 
+  arrange(median)
+
+write_excel_csv(em_meth_data_ss, "em_meth_data_ss.csv")
 ```
-* Zygote NOT egg - egg NOT zygote = +30% 
-* zygote - egg = +22% 
+* Zygote NOT egg - egg NOT zygote = 30 - 12 = +18 pts 
+* zygote - egg = 35 - 20 = +15 pts
+
 
 ## linear models
 ```{r}
@@ -144,8 +162,8 @@ logistic <- function(x){
 
 ```{r}
 model_em_meth <- glm(meth ~ context * genotype * locus, data = em_meth_data_s %>% 
-                       filter(locus != "endosperm siRNA loci") %>% 
-                       filter(locus != "egg siren loci"), 
+                       group_by(context, genotype, locus) %>% 
+                       sample_n(2000), 
                      family = quasibinomial(link = "logit")) 
 
 anova(model_em_meth, test = "LRT")
@@ -163,6 +181,7 @@ em_meth_results <- multcomp::cld(est_em_meth2$emmeans, Letters = letters) %>%
 
 em_meth_results %>% 
   filter(context == "mCHH") %>% 
+  filter(genotype == "WT") %>% 
   select(locus, genotype, context, grouping)
 ```
 
@@ -175,15 +194,15 @@ est_em_meth2$contrasts %>%
 ```
 
 * egg NOT zygote - zygote NOT egg: P = 0
-* egg siRNA loci - zygote siRNA loci: P = 0 
+* egg siRNA loci - zygote siRNA loci: P = 5e-8 
+
+
 
 # plot
 ## CHH 
 ```{r}
 em_meth_data_ss %>% 
   filter(context == "mCHH") %>%
-  filter(locus != "endosperm siRNA loci") %>% 
-  filter(locus != "egg siren loci") %>% 
   inner_join(em_meth_results, by = c("locus", "context", "genotype")) %>% 
   mutate(letter_pos = case_when(
     genotype == "WT" ~ median,
@@ -225,14 +244,10 @@ em_meth_data_ss %>%
 ggsave("em_meth.svg", height = 6, width = 6)
 ggsave("em_meth.png", height = 6, width = 6)
 ```
- 
-
-## CHG 
 ```{r}
 em_meth_data_ss %>% 
-  filter(context == "mCHG") %>%
-  filter(locus != "endosperm siRNA loci") %>% 
-  filter(locus != "egg siren loci") %>% 
+  filter(context == "mCHH") %>%
+  filter(str_detect(locus, "intersect") == F) %>% 
   inner_join(em_meth_results, by = c("locus", "context", "genotype")) %>% 
   mutate(letter_pos = case_when(
     genotype == "WT" ~ median,
@@ -246,16 +261,69 @@ em_meth_data_ss %>%
     str_detect(locus, "embryo siRNA loci") ~ "*embryo siRNA loci",
     T ~ locus
   )) %>% 
-  mutate(locus = factor(locus2, levels = c(
-    "sperm siRNA loci",
-    "egg NOT zygote",
-    "egg siRNA loci",
-    "*embryo siRNA loci",
-    "zygote/egg intersect",
-    "zygote siRNA loci",
-    "zygote NOT egg",
-    "seedling siRNA loci"
-  ))) %>% 
+  mutate(locus = reorder(locus2, median)) %>% 
+  ggplot(aes(x = locus, y = Q3)) +
+  facet_grid(genotype ~., scales = "free", switch = "y") + 
+  geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = locus, xend = locus,  y = Q3, yend = UL)) +
+  geom_segment(aes(x = locus, xend = locus,  y = Q1, yend = LL)) +
+  geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.3, size = 1) +
+  geom_text(aes(label = grouping, y = letter_pos, vjust = vjust),
+   hjust = -0.5, size = 4, fontface = "bold") +
+  labs(x = NULL, 
+       y = "mCHH in WT or drm2 embryo") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14, face = "bold", colour = "black"),
+    axis.text = element_text(colour = "black"), 
+    axis.text.y = element_text(hjust = 0.5),
+    axis.text.x = element_text(hjust = 0.9),  
+    strip.placement = "outside",
+    strip.text.y = element_text(hjust = 0.5, angle = 0, face = "bold"), 
+    panel.spacing = unit(1, "lines"),
+    axis.line = element_line(size = 1),
+    legend.position = "none"
+  ) +
+  coord_flip()  
+
+ggsave("em_meth2.svg", height = 5, width = 6)
+ggsave("em_meth2.png", height = 5, width = 6)
+```
+
+
+## CHG 
+```{r}
+em_meth_data_ss %>% 
+  filter(context == "mCHG") %>%
+  filter(str_detect(locus, "intersect") == F) %>% 
+  inner_join(em_meth_results, by = c("locus", "context", "genotype")) %>% 
+  mutate(letter_pos = case_when(
+    genotype == "WT" ~ median,
+    T ~ Q3
+  )) %>% 
+  mutate(vjust = case_when(
+    genotype == "WT" ~ 0.2,
+    T ~ -0.3
+  )) %>%
+  mutate(locus2 = case_when(
+    str_detect(locus, "embryo siRNA loci") ~ "*embryo siRNA loci",
+    T ~ locus
+  )) %>% 
+  mutate(locus = reorder(locus2, median)) %>% 
+  # mutate(locus = factor(locus2, levels = c(
+  #   "sperm siRNA loci",
+  #   "zygote down loci",
+  #   "zygote down loci -siren",
+  #   "egg siRNA loci",
+  #   "*embryo siRNA loci",
+  #   "zygote up loci -siren",
+  #   "zygote up loci",
+  #   "NS loci",
+  #   "zygote siRNA loci",
+  #   "NS loci -siren",
+  #   "seedling siRNA loci"
+  # ))) %>% 
   ggplot(aes(x = locus, y = Q3)) +
   facet_grid(genotype ~., scales = "free", switch = "y") + 
   geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median), width = 0.7, alpha = 0.8) +
@@ -279,16 +347,18 @@ em_meth_data_ss %>%
   ) +
   coord_flip()  
 
-ggsave("em_meth_CHG.svg", height = 6, width = 6)
-ggsave("em_meth_CHG.png", height = 6, width = 6)
+ggsave("em_meth_CHG.svg", height = 5, width = 6)
+ggsave("em_meth_CHG.png", height = 5, width = 6)
 ```
 
 ## GG
 ```{r}
 em_meth_data_ss %>% 
   filter(context == "mCG") %>%
+  filter(str_detect(locus, "intersect") == F) %>% 
   filter(locus != "endosperm siRNA loci") %>% 
   filter(locus != "egg siren loci") %>% 
+  filter(str_detect(locus, "NOT|intersect") == F) %>% 
   inner_join(em_meth_results, by = c("locus", "context", "genotype")) %>% 
   mutate(letter_pos = case_when(
     genotype == "WT" ~ median,
@@ -302,16 +372,20 @@ em_meth_data_ss %>%
     str_detect(locus, "embryo siRNA loci") ~ "*embryo siRNA loci",
     T ~ locus
   )) %>% 
-  mutate(locus = factor(locus2, levels = c(
-    "sperm siRNA loci",
-    "egg NOT zygote",
-    "egg siRNA loci",
-    "*embryo siRNA loci",
-    "zygote/egg intersect",
-    "zygote siRNA loci",
-    "zygote NOT egg",
-    "seedling siRNA loci"
-  ))) %>% 
+  mutate(locus = reorder(locus2, median)) %>% 
+  # mutate(locus = factor(locus2, levels = c(
+  #   "sperm siRNA loci",
+  #   "zygote down loci",
+  #   "zygote down loci -siren",
+  #   "egg siRNA loci",
+  #   "*embryo siRNA loci",
+  #   "zygote up loci -siren",
+  #   "zygote up loci",
+  #   "NS loci",
+  #   "zygote siRNA loci",
+  #   "NS loci -siren",
+  #   "seedling siRNA loci"
+  # ))) %>% 
   ggplot(aes(x = locus, y = Q3)) +
   facet_grid(genotype ~., scales = "free", switch = "y") + 
   geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median), width = 0.7, alpha = 0.8) +
@@ -335,8 +409,12 @@ em_meth_data_ss %>%
   ) +
   coord_flip()  
 
-ggsave("em_meth_CG.svg", height = 6, width = 6)
-ggsave("em_meth_CG.png", height = 6, width = 6)
+ggsave("em_meth_CG.svg", height = 5, width = 6)
+ggsave("em_meth_CG.png", height = 5, width = 6)
+```
+# Between WT and drm2 at different loci
+```{r}
+multcomp::cld(est_em_meth1$emmeans, Letters = letters)
 ```
 
 

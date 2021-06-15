@@ -34,7 +34,7 @@ library(forcats)
 
 # load data
 ```{r message=FALSE}
-siren_cov_list <- list.files("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/fovary_bed_cov/siren_cov/", 
+siren_cov_list <- list.files("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/24ntCovFullSet3/out_siren/", 
                              pattern = "*siren_loci*", full.names = T)
 
 siren_cov <- sapply(siren_cov_list, read_delim, simplify = FALSE, col_names = F, delim = "\t") %>% 
@@ -52,6 +52,10 @@ sample_des_size <- smRNA_comp %>%
   select(-2, -3, -4, -5, -6)
 
 sample_des_size
+```
+```{r}
+lengths_summary_sam <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/siRNA_length_counts_2021_04_16/lengths_summary.sam.txt", 
+    "\t", escape_double = FALSE, trim_ws = TRUE)
 ```
 
 
@@ -125,6 +129,12 @@ identify_samples <- function(df){
 ```
 
 ```{r}
+lengths_summary_keyed <- lengths_summary_sam %>% 
+  rename(id = X1) %>% 
+  identify_samples()
+```
+
+```{r}
 siren_cov_clean <- siren_cov %>% 
   filter(str_detect(id, "blender-sperm") |
            str_detect(id, "BlenderSperm") |
@@ -147,21 +157,23 @@ siren_cov_clean <- siren_cov %>%
   )) %>% 
   identify_samples() %>% 
   inner_join(sample_des_size, by = "sample_ID") %>% 
-  mutate(RPM = X4/`general siRNA` * 10^6) 
+  inner_join(lengths_summary_keyed, by = "sample_ID") %>% 
+  mutate(RPM = X4/`24` * 10^6) 
 
 head(siren_cov_clean)  
 
 siren_cov_clean %>% 
-  group_by(siren_type) %>% 
+  group_by(siren_type, sample_type) %>% 
   count()
 ```
+
 
 ```{r}
 siren_cov_clean_s <- siren_cov_clean %>% 
   group_by(siren_type, sample_type, X1, X2, X3) %>% 
   summarise(
     reads = sum(X4),
-    total = sum(`general siRNA`)
+    total = sum(`24`)
   ) %>% 
   ungroup() %>% 
   mutate(RPM = (reads + 0.25) / total * 10^6) %>% 
@@ -188,35 +200,6 @@ siren_cov_clean_ss <- siren_cov_clean_s %>%
 siren_cov_clean_ss
 ```
 
-# egg vs zygote
-```{r}
-siren_cov_clean_s_ez <- siren_cov_clean_s %>% 
-  filter(sample_type == "egg" |
-           sample_type == "zygote") %>% 
-  filter(siren_type == "egg siren loci") %>% 
-  select(X1, X2, X3, sample_type, RPM) %>% 
-  spread(sample_type, RPM)
-
-head(siren_cov_clean_s_ez)
-```
-```{r}
-siren_cov_clean_s_ez %>% 
-  filter(zygote == min(zygote)) %>% 
-  nrow()
-
-summary(siren_cov_clean_s_ez$zygote)
-```
-## correlation 
-```{r}
-test1 <- cor.test(siren_cov_clean_s_ez$egg, siren_cov_clean_s_ez$zygote)
-test1$p.value
-test1$estimate
-```
-## regression 
-```{r}
-model_egg_zygote <- lm(log(zygote) ~ log(egg) + 0 , siren_cov_clean_s_ez)
-summary(model_egg_zygote)
-```
 ```{r}
 logticks = c(seq(0.01, 0.1, 0.01),
              seq(0.1, 1, by = 0.1),
@@ -237,32 +220,7 @@ loglabel <- data.frame("values" = logticks) %>%
   ))
 ```
 
-```{r}
-siren_cov_clean_s_ez %>% 
-  ggplot(aes(x = egg, y = zygote)) +
-  geom_point(alpha = 0.5) +
-   geom_smooth(method = "lm") +
-  scale_x_log10(breaks = c(1, 10, 100, 1000)) +
-  scale_y_log10(breaks = c(1, 10, 100, 1000)) +
-  #annotation_logticks() +
-  labs(x = "RPM in egg",
-       y = "RPM in zygote") +
-  annotate(geom = "text",
-           label = "y = 0.84x, R^2 = 0.81",
-           size = 5, 
-           x = 1, y = Inf,
-           hjust = -0.1, vjust = 1.1) +
-  theme_classic() +
-  theme(
-    text = element_text(size = 18, face = "bold", color = "black"),
-    axis.text = element_text(color = "black")
-  ) +
-  coord_fixed()
-
-ggsave("siren_expression_maintain_in_zygote.svg", height = 5, width = 5)
-ggsave("siren_expression_maintain_in_zygote.png", height = 5, width = 5)
-```
- 
+  
 
 # siren expression across samples 
 ```{r}
@@ -319,7 +277,8 @@ siren_cov_clean_ss %>%
   geom_segment(aes(x = sample_type, xend = sample_type,  y = Q1, yend = LL)) +
   geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.3, size = 1) +
   geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.3, size = 1) +
-  geom_text(aes(label = group, y = UL), size = 5, fontface = "bold", vjust = -0.3) +
+  geom_text(aes(label = group, y = (Q3 + UL)/2), 
+            size = 3.5, fontface = "bold", vjust = 0.5, hjust = -0.2) +
   scale_fill_manual(values = c("orangered3", "tomato1", 
                                "seagreen", "dodgerblue2", "coral4",
                                "violetred4", "grey20","lightgoldenrod3"),
@@ -345,56 +304,17 @@ siren_cov_clean_ss %>%
   theme(axis.text.y = element_text(colour = "black")) +
   coord_trans(y = "log10")   
 
-ggsave("siren_RPM.svg", height = 5.5, width = 10)
-ggsave("siren_RPM.png", height = 5.5, width = 10)
-```
-
-# how ovary siren in ovary vs egg (low in egg) 
-
-```{r}
-head(siren_cov_clean_s)
-
-siren_wide <- siren_cov_clean_s %>% 
-  select(X1, X2, X3, RPM, sample_type, siren_type) %>% 
-  spread(sample_type, RPM)
-
-head(siren_wide)
+ggsave("siren_RPM.svg", height = 4, width = 9.5)
+ggsave("siren_RPM.png", height = 4, width = 9.5)
 ```
 
 
-## scatter 
-```{r}
-model_ovary_siren_egg_ov <- lm(log(egg) ~ log(ovary) + 0, data = siren_wide %>% 
-                                 filter(siren_type == "ovary siren loci"))
 
-summary(model_ovary_siren_egg_ov)
-```
 
-```{r}
-siren_wide %>% 
-  filter(siren_type == "ovary siren loci") %>% 
-  ggplot(aes(y = egg, x = ovary)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm") +
-  scale_x_log10(breaks = c(1, 10, 100, 1000)) +
-  scale_y_log10(breaks = c(1, 10, 100, 1000)) +
-  labs(x = "ovary RPM",
-       y = "egg RPM") +
-   annotate(geom = "text",
-           label = "y = 0.95x, R^2 = 0.99",
-           size = 5, 
-           x = 1, y = Inf,
-           hjust = -0.1, vjust = 1.1) +
-  theme_classic() +
-  theme(
-    text = element_text(size = 18, face = "bold", color = "black"),
-    axis.text = element_text(color = "black")
-  ) +
-  coord_fixed() 
 
-ggsave("siren_expression_ovary_vs_egg.svg", height = 5, width = 5)
-ggsave("siren_expression_ovary_vs_egg.png", height = 5, width = 5)
-```
+
+
+
 
 
 
