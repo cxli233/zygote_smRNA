@@ -234,7 +234,7 @@ ov9h_1 <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA proj
 ov9h_2 <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/fovary_siRNA/OV9H_2_S28_L004_R1_001.fastq.gz.trimmed.dedup.fastq.gz.sh.o462582", 
      col_names = FALSE)
 
-ov9h_3 <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/fovary_siRNA/OV9H_3_S29_L004_R1_001.fastq.gz.trimmed.dedup.fastq.gz.sh.o462583", 
+ov9h_3 <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/fovary_siRNA/OV9H_3_S29_L004_R1_001.fastq.gz.trimmed.dedup.fastq.gz.sh.o2016453", 
      col_names = FALSE)
 
 SD8 <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/fovary_siRNA/SD8_S30_L004_R1_001.fastq.gz.trimmed.dedup.fastq.gz.sh.o462584", 

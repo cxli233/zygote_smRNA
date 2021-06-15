@@ -924,6 +924,28 @@ cpm_s_ranked %>%
 7 detected in egg and not in zygote. 
 
 ```{r}
+top_egg_zygote_miR <- cpm_s_ranked %>% 
+  mutate(top = case_when(
+    miR %in% egg_top_10$miR &
+      miR %in% zygote_top_10$miR ~ "top egg & zygote",
+    miR %in% egg_top_10$miR &
+      miR %in% zygote_top_10$miR == F ~ "egg top 20 only",
+    miR %in% egg_top_10$miR == F &
+      miR %in% zygote_top_10$miR ~ "zygote top 20 only",
+    T ~ "neither"
+  )) %>% 
+  select(sequence, sample_type, miR, miR2, CPM, top) %>% 
+  spread(sample_type, CPM) %>% 
+  filter(top == "top egg & zygote") %>% 
+  select(sequence, miR2, egg, zygote) %>% 
+  arrange(-zygote) %>% 
+  mutate(DNA = str_replace_all(sequence, "U", "T")) 
+
+write_excel_csv(top_egg_zygote_miR, "top_egg_zygote_miRNA.csv")
+top_egg_zygote_miR
+```
+
+```{r}
 cpm_s_ranked %>% 
   mutate(top = case_when(
     miR %in% egg_top_10$miR &

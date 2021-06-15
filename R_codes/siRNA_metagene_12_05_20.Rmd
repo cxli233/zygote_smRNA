@@ -52,7 +52,7 @@ sample_des <- read_excel("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRN
 smRNA_comp <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/codes_and_output/smRNA_comp.csv")
 ```
 ```{r}
-total_siRNA_length <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/siRNA_lengths/lengths_summary.bam.sam.txt", 
+total_siRNA_length <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/length_summaries_2020_03_12/lengths_summary.bam.sam.txt", 
     "\t", escape_double = FALSE, trim_ws = TRUE)
 ```
  
@@ -191,7 +191,17 @@ stat_data <- meta_data %>%
 ```
 
 ```{r}
-model_meta <- lm(pro_24 ~ sample_type, data = stat_data)
+logit <- function(p){log(
+  p / (1-p)
+)}
+
+logistic <- function(x){
+  1/(1 + exp(-x))
+}
+```
+
+```{r}
+model_meta <- lm(logit(pro_24) ~ sample_type, data = stat_data)
 anova(model_meta) 
 ```
 
@@ -213,17 +223,17 @@ anova_result <- multcomp::cld(est_meta$emmeans, Letters = letters) %>%
       str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" , 
     str_detect(sample_type, "embryo") ~ "embryo",
     T ~ sample_type
-  )) %>% 
-  mutate(text.y = case_when(
-    grouping == "a" ~ 50,
-    grouping == "b" ~ 150,
-    grouping == "bc" ~ 200,
-    grouping == "c" ~ 250,
-    grouping == "d" ~ 420
-  ))
+  ))  
 
 head(anova_result)
 ```
+```{r}
+stat_data %>% 
+  group_by(sample_type) %>% 
+  summarise(mean = mean(pro_24))
+```
+
+
 zygote - egg = (366 - 304)/304 * 100% = 20%
 ovary 9 -ovary 0 = (344 - 327)/327 * 100% = 5%  
    
@@ -361,16 +371,16 @@ meta_data %>%
   geom_point(aes(fill = sample_type), color = "white", shape = 21, alpha = 0.8, 
              position = position_jitter(0.1, seed = 666), size = 2) +
   geom_text(data = anova_result %>% 
-              mutate(location == "5' end"), aes(label = grouping, y = text.y), size = 5, 
+              mutate(location == "5' end"), aes(label = grouping, y = logistic(emmean) * 600), size = 3.5, 
             fontface = "bold") +
   annotate(geom = "errorbarh", xmin = 2, xmax = 3, y = 380, 
             size = 1, height = 5) +
   annotate(geom = "errorbarh", xmin = 4, xmax = 5, y = 420, 
            size = 1, height = 5) +
   annotate(geom = "text", x = 2.5, y= 380, 
-           label = "NS", size = 4, fontface = "bold", hjust = -0.2) +
+           label = "NS", size = 3.5, fontface = "bold", hjust = -0.2) +
   annotate(geom = "text", x = 4.5, y= 420, 
-           label = "3e-8", size = 4, fontface = "bold", hjust = -0.1) +
+           label = "3e-8", size = 3.5, fontface = "bold", hjust = -0.1) +
   scale_fill_manual(values = c("orangered3", "tomato1", "seagreen", "dodgerblue2",  "coral4", "violetred4", "grey20"),
                     limits = c("ovary (0hr)",  "egg", "seedling", "sperm", "ovary (9hap)", "zygote", "embryo")) +
   scale_y_continuous(breaks = c(0, 200, 400, 600)) +

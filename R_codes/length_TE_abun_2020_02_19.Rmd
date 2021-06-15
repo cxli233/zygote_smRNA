@@ -25,10 +25,11 @@ library(emmeans)
 library(stringr)
 library(RColorBrewer)
 library(svglite)
+library(cowplot)
 ```
 
 # smRNA composition 
-```{r}
+```{r message=F}
 sample_des <-  read_excel("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/sample_des_clvs12.xlsx")  
 
 smRNA_comp <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/codes_and_output/smRNA_comp.csv")
@@ -57,8 +58,8 @@ smRNA_comp_L <- smRNA_comp %>%
     str_detect(RNA_type, "tRNA") ~ "tRNAs", 
     str_detect(RNA_type, "NOR") ~ "NOR RNAs", 
     str_detect(RNA_type, "5S") ~ "5S rRNAs",
-    str_detect(RNA_type, "21nt") ~ "phasiRNAs (21nt)",
-    str_detect(RNA_type, "24nt") ~ "phasiRNAs (24nt)"
+    str_detect(RNA_type, "21nt") ~ "phasiRNAs (21-nt)",
+    str_detect(RNA_type, "24nt") ~ "phasiRNAs (24-nt)"
   )) %>% 
   as.data.frame() 
 
@@ -85,7 +86,7 @@ smRNA_comp_L %>%
   filter(genotype == "WT") %>% 
   filter(RNA_type != "general siRNA") %>% 
   mutate(RNA_type2 = factor(RNA_type1, levels = c(
-    "miRNAs", "phasiRNAs (24nt)", "phasiRNAs (21nt)", "tRNAs", "NOR RNAs", "5S rRNAs"
+    "miRNAs", "phasiRNAs (24-nt)", "phasiRNAs (21-nt)", "tRNAs", "NOR RNAs", "5S rRNAs"
   ))) %>% 
   # mutate(sample_type.f = factor(sample_type, levels = c(
   #      "egg", "seedling shoot", "sperm", "zygote"
@@ -112,21 +113,156 @@ smRNA_comp_L %>%
 ggsave("smRNA_comp_overall_essz.svg", width = 4.9, height = 6)
 ggsave("smRNA_comp_overall_essz.png", width = 4.9, height = 6)
 ```
+##stat
+### summary stat 
+```{r}
+smRNA_comp_L %>% 
+  filter(sample_type == "egg"|
+           sample_type == "sperm"|
+           sample_type == "seedling shoot"|
+           sample_type == "zygote" |
+           sample_type == "ovary" |
+           sample_type == "ovary_9hap") %>% 
+  mutate(sample_type = case_when(
+    str_detect(sample_type, "seedling") ~ "seedling",
+    str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
+    str_detect(sample_type, "ovary") & 
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" , 
+    T ~ sample_type
+  )) %>% 
+  filter(genotype == "WT") %>% 
+  filter(RNA_type1 == "miRNAs" |
+           RNA_type1 == "phasiRNAs (24-nt)" |
+           RNA_type1 == "phasiRNAs (21-nt)" ) %>% 
+  mutate(RNA_type2 = factor(RNA_type1, levels = c(
+    "miRNAs", "phasiRNAs (24-nt)", "phasiRNAs (21-nt)"
+  ))) %>% 
+  mutate(sample_type = factor(sample_type, levels = rev(c(
+      "seedling", "embryo", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
+  )))) %>%  
+  group_by(sample_type, RNA_type1) %>% 
+  summarise(mean = mean(pro * 100)) %>% 
+  arrange(RNA_type1)
+```
 
+* miR: egg & zygote: 1.8%
+* 24-nt phasiRNA: egg & zygote: 0.4%
+* 21-nt phasiRNA: egg & zygote: 0.2% and 0.03%
+
+### linear models 
+```{r}
+logit <- function(p){log(
+  p / (1-p)
+)}
+
+logistic <- function(x){
+  1/(1 + exp(-x))
+}
+```
+
+```{r}
+model_smRNA <- lm(logit(pro) ~ RNA_type1 * sample_type, data = smRNA_comp_L %>% 
+  filter(sample_type == "egg"|
+           sample_type == "sperm"|
+           sample_type == "seedling shoot"|
+           sample_type == "zygote" |
+           sample_type == "ovary" |
+           sample_type == "ovary_9hap") %>% 
+  mutate(sample_type = case_when(
+    str_detect(sample_type, "seedling") ~ "seedling",
+    str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
+    str_detect(sample_type, "ovary") & 
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" , 
+    T ~ sample_type
+  )) %>% 
+  filter(genotype == "WT") %>% 
+  mutate(sample_type = factor(sample_type, levels = rev(c(
+      "seedling", "embryo", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
+  )))))
+
+anova(model_smRNA) 
+```
+```{r}
+est_smRNA <- emmeans(model_smRNA, pairwise ~ sample_type | RNA_type1)
+
+smRNA_results <- multcomp::cld(est_smRNA$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_remove_all(.group, " "))
+
+smRNA_results
+```
+
+## plot
+```{r}
+smRNA_comp_L %>% 
+  filter(sample_type == "egg"|
+           sample_type == "sperm"|
+           sample_type == "seedling shoot"|
+           sample_type == "zygote" |
+           sample_type == "ovary" |
+           sample_type == "ovary_9hap") %>% 
+  mutate(sample_type = case_when(
+    str_detect(sample_type, "seedling") ~ "seedling",
+    str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
+    str_detect(sample_type, "ovary") & 
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" , 
+    T ~ sample_type
+  )) %>% 
+  filter(genotype == "WT") %>% 
+  filter(RNA_type1 == "miRNAs" |
+           RNA_type1 == "phasiRNAs (24-nt)" |
+           RNA_type1 == "phasiRNAs (21-nt)" ) %>% 
+  mutate(RNA_type2 = factor(RNA_type1, levels = c(
+    "miRNAs", "phasiRNAs (24-nt)", "phasiRNAs (21-nt)"
+  ))) %>% 
+  mutate(sample_type = factor(sample_type, levels = rev(c(
+      "seedling", "embryo", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
+  )))) %>%  
+  ggplot(aes(x = sample_type, y = pro * 100)) +
+  geom_vline(xintercept = -Inf, size = 1.2) +
+  geom_hline(yintercept = -Inf, size = 1.2) +
+  geom_bar(stat = "summary", aes(fill = sample_type), fun = mean, alpha = 0.8, width = 0.7) +
+  geom_point(color = "white", shape = 21, aes(fill = sample_type), alpha = 0.8, position = position_jitter(0.1, seed = 666)) +
+   geom_text(data = smRNA_results %>% 
+               filter(RNA_type1 == "miRNAs" |
+           RNA_type1 == "phasiRNAs (24nt)" |
+           RNA_type1 == "phasiRNAs (21nt)" ) %>% 
+  mutate(RNA_type2 = factor(RNA_type1, levels = c(
+    "miRNAs", "phasiRNAs (24nt)", "phasiRNAs (21nt)"
+  ))), aes(label = grouping), size = 4, fontface = "bold", y = 0,
+            hjust = 0) +
+  facet_grid( . ~ RNA_type2, scales = "free_x") +
+  scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "coral4","orangered3",  "dodgerblue2"),
+                    limits = c(
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
+  )) +  
+  labs(x = NULL, 
+       y = "% small RNA",
+       fill = NULL) +
+  theme_minimal() +
+  theme(legend.position = "none", legend.direction = "horizontal") +
+  theme(text = element_text(size= 14, face="bold")) +
+  theme(axis.text.y=element_text(colour = "black", hjust = 0.5)) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(panel.spacing.x = unit(1, "lines")) +
+  coord_flip()
+
+ggsave(filename = "smRNA_bar.svg", width = 7, height = 2.5) 
+ggsave(filename = "smRNA_bar.png", width = 7, height = 2.5) 
+```
 
 
 # abundance of siRNA at TE & loci categories across sample types 
 ## load data 
 ```{r message=F, warning= F} 
-length_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/length_summary_shortstack_loci/", 
+length_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/siRNA_length_counts_2021_04_16/", 
                         pattern = "*.txt", full.names = T) 
 
-length_data <- sapply(length_list, read_delim, simplify = FALSE, delim = "\t") %>% 
-  bind_rows(.id = "id")
+length_data1 <- sapply(length_list, read_delim, simplify = FALSE, delim = "\t") %>% 
+  bind_rows(.id = "id")  
 
-head(length_data) 
+head(length_data1) 
 ```
-
  
 ```{r}
 sample_des_size <- smRNA_comp %>% 
@@ -203,48 +339,72 @@ sample_des_size
 } 
 ```
 
+```{r message=F}
+#just general siRNA (to normalize to 24-nt counts)
+lengths_summary_sam <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/siRNA_length_counts_2021_04_16/lengths_summary.sam.txt", 
+    "\t", escape_double = FALSE, trim_ws = TRUE)
+
+lengths_summary_sam <- lengths_summary_sam %>% 
+  identify_samples2() 
+head(lengths_summary_sam)
+```
+
 ```{r}
-length_data <- length_data %>% 
+length_data <- length_data1 %>% 
   identify_samples2() %>% 
   mutate(category = case_when(
-    str_detect(id, "summary.bam.sam") ~ "general siRNA",  #1
+    str_detect(id, "summary.sam") ~ "general siRNA",  #1
     str_detect(id, "egg_loci") ~ "egg siRNA loci",  #2
-    str_detect(id, "egg-zygote_com") ~ "egg NOT zygote\nloci",  #3 
+    str_detect(id, ".summary.egg-zygote_com") ~ "egg siRNA loci\n(minus zygote siRNA loci)",  #3 
     str_detect(id, "embryo_loci") ~ "embryo siRNA loci",   #4
-    str_detect(id, "endo_siren") ~ "endosperm siren loci",   #5
-    str_detect(id, "endosperm_loci") ~ "endosperm siRNA loci",  #6
     str_detect(id, "fovary_loci") ~ "ovary (9hap) siRNA loci",  #7
-    str_detect(id, "fovary_siren") ~ "ovary (9hap) siren loci",  #8
-    str_detect(id, "Gypsy.") ~ "Gypsy",  #9
+    str_detect(id, "summary.Gypsy.") ~ "Gypsy",  #9
+    str_detect(id, "sirenF.bam.Gypsy.") ~ "Gypsy\n(siren siRNAs excluded)",  #9
     str_detect(id, "y.ovary_loci") ~ "ovary (0hr) siRNA loci",  #10
-    str_detect(id, "y.ovary_siren") ~ "ovaery (0hr) siren loci",  #11
-    str_detect(id, "q20") ~ "uniquely mapped",   #12
     str_detect(id, "seedling_loci") ~ "seedling siRNA loci", #13 
     str_detect(id, "sperm_loci") ~ "sperm siRNA loci",  #14
-    str_detect(id, "TIR") ~ "TIR",   #15
+    str_detect(id, "summary.TIR") ~ "TIR",   #15
+    str_detect(id, "sirenF.bam.TIR") ~ "TIR\n(siren siRNAs excluded)",   #15
     str_detect(id, "zygote_loci") ~ "zygote siRNA loci",  #16
-    str_detect(id, "seedling-specific") ~ "seedling-specific\nloci", #17
-    str_detect(id, "sperm-specific") ~ "sperm-specific\nloci", #18
-    str_detect(id, "egg-specific") ~ "egg-specific\nloci", #19
-    str_detect(id, "intersection_loci") ~ "egg/sperm/seedling\nintersect loci", #20
-    str_detect(id, "zygote-egg_com") ~ "zygote NOT egg\nloci", #21
-    str_detect(id, "zygote-egg_inter") ~ "zygote/egg\nintersect" #22 
+    
+    str_detect(id, "summary.seedling-specific") ~ "seedling-signature\nloci", #17
+    str_detect(id, "summary.sperm-specific") ~ "sperm-signature\nloci", #18
+    str_detect(id, "summary.egg-specific") ~ "egg-signature\nloci", #19
+    str_detect(id, "summary.egg-sperm-seedling_intersect") ~ "egg/sperm/seedling\nintersect loci", #20
+    str_detect(id, "summary.CHH_") ~ "embryo DRM2 targets", #21
+    
+    str_detect(id, ".summary.zygote-egg_com") ~ "zygote siRNA loci\n(minus egg siRNA loci)", 
+    str_detect(id, ".summary.zygote-egg_inter") ~ "zygote/egg\nloci intersect", 
+    
+    str_detect(id, "summary.sirenF.sam") ~ "non-siren siRNA", 
+    str_detect(id, "sirenF.bam.egg_NOT_zygote_NOT") ~ "egg siRNA loci\n(minus zygote siRNA loci)\n(siren siRNAs excluded)",  
+    str_detect(id, "sirenF.bam.zygote_NOT_egg_NOT") ~ "zygote siRNA loci\n(minus egg siRNA loci)\n(siren siRNAs excluded)", 
+    str_detect(id, "sirenF.bam.zygote_egg_intersect_NOT") ~ "zygote/egg\nloci intersect\n(siren siRNAs excluded)" ,
+    
+    str_detect(id, "sirenF.bam.seedling-specific") ~ "seedling-signature loci\n(siren siRNAs excluded)", #17
+    str_detect(id, "sirenF.bam.sperm-specific") ~ "sperm-signature loci\n(siren siRNAs excluded)", #18
+    str_detect(id, "sirenF.bam.egg-specific") ~ "egg-signature loci\n(siren siRNAs excluded)", #19
+    str_detect(id, "sirenF.bam.egg-sperm-seedling_intersect") ~ "egg/sperm/seedling\nloci intersect\n(siren siRNAs excluded)", #20
+    str_detect(id, "sirenF.bam.CHH_") ~ "embryo DRM2 targets\n(siren siRNAs excluded)", #21
   )) %>% 
+  filter(is.na(category) == F) %>% 
   gather("length", "count", c(`20`, `21`, `22`, `23`, `24`, `25`)) %>% 
   inner_join(sample_des_size, by = "sample_ID") %>% 
-  mutate(proportion = count/`general siRNA`)  
+  inner_join(lengths_summary_sam %>% 
+               select(-X1), by = "sample_ID") %>% 
+  mutate(proportion = count/`general siRNA`) %>% 
+  mutate(pro_24 = count/`24`) 
 
 head(length_data)
 ```
 
- 
 
- 
 ## length profile - line plot 
 ```{r}
 length_data %>% 
   filter(genotype == "WT") %>% 
   filter(sample_type == "egg"|
+           #sample_type == "embryo 7-8 DAF" |
            sample_type == "sperm"|
            sample_type == "seedling shoot"|
            sample_type == "zygote" |
@@ -257,12 +417,11 @@ length_data %>%
     str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
     str_detect(sample_type, "ovary") & 
       str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" ,
-    str_detect(sample_type, "embryo") ~ "embryo",
+    str_detect(sample_type, "embryo") ~ "*embryo",
     T ~ sample_type
   )) %>% 
   mutate(category = factor(category, levels = c(
-    "general siRNA", "TIR", "Gypsy",
-    "egg NOT zygote\nloci", "zygote NOT egg\nloci"
+    "general siRNA", "TIR", "Gypsy"
   ))) %>% 
   ggplot(aes(x = length, y = proportion*100 )) +
   geom_vline(xintercept = -Inf, size = 1.5) +
@@ -285,82 +444,48 @@ length_data %>%
 ggsave(filename = "siRNA profile gamemtes.svg", width = 7, height = 4)
 ggsave(filename = "siRNA profile gamemtes.png", width = 7, height = 4)
 ```
+ 
 
 
 ## stat 
-### TIR, Gypsy and zygote NOT egg, egg NOT zygote 
+calculate reads overlapping siren 
+siren reads = total reads - sirenF reads 
+
+### siren reads 
+```{r message=F}
+lengths_summary_sirenF_sam <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/siRNA_length_counts_2021_04_16/lengths_summary.sirenF.sam.txt", 
+    "\t", escape_double = FALSE, trim_ws = TRUE)
+
+head(lengths_summary_sirenF_sam)
+```
 ```{r}
-anova_data <- length_data %>% 
-  filter(genotype == "WT") %>% 
- filter(sample_type == "egg"|
+siren_counts <- lengths_summary_sirenF_sam %>% 
+  identify_samples2() %>% 
+  select(-X1) %>% 
+  inner_join(lengths_summary_sam, by = "sample_ID") %>% 
+  mutate(pro24 = 1-`24.x`/`24.y`)  %>% 
+  select(sample_ID, pro24) %>% 
+  inner_join(sample_des_size, by = "sample_ID") 
+  
+
+head(siren_counts)
+```
+```{r}
+siren_counts %>% 
+  filter(sample_type == "egg"|
+           #sample_type == "embryo 7-8 DAF" |
            sample_type == "sperm"|
            sample_type == "seedling shoot"|
            sample_type == "zygote" |
            sample_type == "ovary" |
-           sample_type == "ovary_9hap" |
-           sample_type == "embryo 7-8 DAF") %>% 
-  mutate(sample_type = case_when(
-    str_detect(sample_type, "seedling") ~ "seedling",
-    str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
-    str_detect(sample_type, "ovary") & 
-      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" , 
-    str_detect(sample_type, "embryo") ~ "embryo",
-    T ~ sample_type
-  )) %>% 
-  filter(length == 24) %>% 
-  filter(str_detect(category, "TIR|Gypsy|NOT|zygote/egg"))  
-```
-
-### summary stats, zygote NOT egg 
-```{r}
-anova_data %>% 
-  filter(category == "zygote NOT egg\nloci") %>% 
+           sample_type == "ovary_9hap") %>% 
   group_by(sample_type) %>% 
-  summarise(
-    mean = mean(proportion)
-  )
-```
- 
-* zygote / egg = 8%/1% = 8x 
-* ovary9hap / ovary0h = 2.8% / 3.2% = 0.9x 
-
-### summary stats, egg NOT zygote 
-```{r}
-anova_data %>% 
-  filter(category == "egg NOT zygote\nloci") %>% 
-  group_by(sample_type) %>% 
-  summarise(
-    mean = mean(proportion)
-  )
-```
-* egg vs zygote: 7x 
-* ovaries: 0.018 vs 0.012 
-
-### summary stats, zygote egg intersect
-```{r}
-anova_data %>% 
-  filter(category == "zygote/egg\nintersect") %>% 
-  group_by(sample_type) %>% 
-  summarise(
-    mean = mean(proportion)
-  )
+  summarise(mean = mean(pro24)) 
 ```
 
+* zygote vs. egg = 42% vs 44%
+* ovary = 56%
 
-### summary stats, TE 
-```{r}
-anova_data %>% 
-  filter(str_detect(category, "Gypsy|TIR")) %>% 
-  group_by(sample_type, category) %>% 
-  summarise(
-    mean = mean(proportion)
-  ) %>% 
-  arrange(category)
-```
-* Gypsy: sperm vs. zygote 3x
-* TIR: zygote vs. seedling 3x 
-
-### linear models 
 ```{r}
 logit <- function(p){log(
   p / (1-p)
@@ -372,129 +497,402 @@ logistic <- function(x){
 ```
 
 ```{r}
-model_24 <- lm(proportion ~ category * sample_type, data = anova_data)
-anova(model_24)
+model_siren_counts_logit <- lm(logit(pro24) ~ sample_type, data = siren_counts %>% 
+  filter(sample_type == "egg"|
+          # sample_type == "embryo 7-8 DAF" |
+           sample_type == "sperm"|
+           sample_type == "seedling shoot"|
+           sample_type == "zygote" |
+           sample_type == "ovary" |
+           sample_type == "ovary_9hap") %>% 
+    mutate(sample_type = case_when(
+    str_detect(sample_type, "seedling") ~ "seedling",
+    str_detect(sample_type, "embryo") ~ "*embryo", 
+    str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
+    str_detect(sample_type, "ovary") & 
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)",
+    T ~ sample_type
+  )))
+
+
+anova(model_siren_counts_logit)
 ```
 ```{r}
-model_24_logit <- lm(logit(proportion) ~ category * sample_type, data = anova_data)
-anova(model_24_logit)
+est_siren_count <- emmeans(model_siren_counts_logit, pairwise ~ sample_type) 
+est_siren_count$contrasts
 ```
+* zygote - egg: NS
+* ovary: NS
 
 ```{r}
-est_24_logit <- emmeans(model_24_logit, pairwise  ~ sample_type | category)
-
-NOT_results <- multcomp::cld(est_24_logit$emmeans, Letters = letters) %>% 
+siren_count_results <- multcomp::cld(est_siren_count$emmeans, Letters = letters) %>% 
   as.data.frame() %>% 
-  mutate(grouping = str_remove_all(.group, " ")) %>% 
-  filter(str_detect(category, "NOT|inter"))  %>% 
-  filter(sample_type != "embryo") 
- 
+  mutate(grouping = str_replace_all(.group, " ", ""))
 
-NOT_results
+siren_count_results
 ```
 
-```{r}
-TE_results <- multcomp::cld(est_24_logit$emmeans, Letters = letters) %>% 
-  as.data.frame() %>% 
-  mutate(grouping = str_remove_all(.group, " ")) %>% 
-  filter(str_detect(category, "TIR|Gypsy"))  %>% 
-  filter(sample_type != "embryo") 
-
-TE_results
-```
-
+### TIR and Gypsy (siren reads included)
 
 ```{r}
-est_24_logit$contrasts %>% 
-  as.data.frame() 
-```
-* TIR: zygote vs. seedling: 3.8e-14
-* Gypsy: zygote vs sperm: 3.6e-14 
-
-* egg NOT zygote: ovary 0 - ovary 9: 0.1 NS
-* egg NOT zygote: egg - zygote: 4e-14 ***
-
-* zygote NOT egg: ovary 0 - ovary 9: 1 
-* zygote NOT egg: egg - zygote: 4e-14 *** 
-
-* zygote-egg intersect: egg - zygote NS
-* zygote-egg intersect: ovary 0 - ovary 9 NS
-
-## plot 
-### TE 
-```{r}
-annotate_TE1 <- data.frame(
-    xmin = 5,
-    xmax = 6
-  ) %>% 
-  mutate(category = "TIR") %>% 
-  mutate(sample_type = "seedling" ) %>% 
-  mutate(proportion = 0.15) %>% 
-  mutate(text = "3.8e-14") %>% 
-  mutate(vjust = 2)%>% 
-  mutate(hjust = -0.08)
-
-annotate_TE2 <-  data.frame(
-    xmin = 1,
-    xmax = 5
-  ) %>% 
-  mutate(category = "Gypsy") %>% 
-  mutate(sample_type = "zygote" ) %>% 
-  mutate(proportion = 0.18) %>% 
-  mutate(text = "3.6e-14") %>% 
-  mutate(vjust = 6)%>% 
-  mutate(hjust = -0.1)
-
-annotate_TE <- rbind(
-   annotate_TE1,
-   annotate_TE2
-) %>% 
-  mutate(category = factor(category, levels = c("TIR", "Gypsy")))
-```
-
-```{r}
-length_data %>% 
-  filter(genotype == "WT") %>% 
+TE_data <- length_data %>% 
   filter(length == 24) %>% 
+  filter(str_detect(category, "TIR|Gypsy")) %>%
+  filter(str_detect(category, "siren") == F) %>%
+  select(sample_ID, sample_type, proportion, pro_24,category) %>% 
   filter(sample_type == "egg"|
            sample_type == "sperm"|
            sample_type == "seedling shoot"|
            sample_type == "zygote" |
            sample_type == "ovary" |
-           sample_type == "ovary_9hap" ) %>% 
-  filter(str_detect(category, "siren") == F) %>% 
-  filter(str_detect(category, "TIR|Gypsy")) %>%
+           sample_type == "ovary_9hap") %>% 
   mutate(sample_type = case_when(
     str_detect(sample_type, "seedling") ~ "seedling",
     str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
     str_detect(sample_type, "ovary") & 
-      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" ,
-    str_detect(sample_type, "embryo") ~ "embryo",
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)",
     T ~ sample_type
-  )) %>% 
+  )) 
+
+head(TE_data)
+```
+```{r}
+TE_data %>% 
+  group_by(category, sample_type) %>% 
+  summarise(mean = mean(pro_24))
+```
+* Gypsy: sperm vs. zygote ~3x
+* Gypsy: egg vs. zygote: 19% vs 12%
+
+* TIR: zygote vs. seedling ~2.5x
+* TIR: zygote vs. egg: 17% vs 12% 
+
+```{r}
+model_TE_logit <- lm(logit(pro_24) ~ sample_type*category, TE_data)
+anova(model_TE_logit)
+```
+
+```{r}
+est_TE <- emmeans(model_TE_logit, pairwise ~ sample_type | category) 
+est_TE$contrasts %>% 
+  as.data.frame()
+```
+
+* Gypsy: zygote - egg: 9e-7
+* Gypsy: zygote - seedling: 5e-10
+* Gypsy: zygote - sperm: 0
+
+* TIR: zygote - egg: 1.4e-3
+* TIR: zygote - seedling: 9e-4
+
+```{r}
+TE_results <- multcomp::cld(est_TE$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_replace_all(.group, " ", "")) %>% 
+  mutate(grouping = case_when(
+    category == "Gypsy" ~ toupper(grouping),
+    T ~ grouping
+    ))
+
+TE_results
+```
+
+### TIR and Gypsy (siren siRNAs excluded)
+```{r}
+TE_data_sirenF <- length_data %>% 
+  filter(length == 24) %>% 
+  filter(str_detect(category, "TIR|Gypsy")) %>%
+  filter(str_detect(category, "siren")) %>%
+  inner_join(lengths_summary_sirenF_sam %>% 
+               identify_samples2() %>%
+               select(-X1), by = "sample_ID") %>% 
+  mutate(pro_24_sirenF = count / `24.y`) %>% 
+  select(sample_ID, sample_type, pro_24_sirenF, category) %>% 
+  filter(sample_type == "egg"|
+           sample_type == "sperm"|
+           sample_type == "seedling shoot"|
+           sample_type == "zygote" |
+           sample_type == "ovary" |
+           sample_type == "ovary_9hap") %>% 
+  mutate(sample_type = case_when(
+    str_detect(sample_type, "seedling") ~ "seedling",
+    str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
+    str_detect(sample_type, "ovary") & 
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)",
+    T ~ sample_type
+  )) 
+
+head(TE_data_sirenF)
+```
+```{r}
+TE_data_sirenF %>% 
+  group_by(category, sample_type) %>% 
+  summarise(mean = mean(pro_24_sirenF))
+```
+* Gypsy: egg-zygote: 26% vs. 15%
+* TIR: egg-zygote: 20% vs. 27% 
+
+```{r}
+model_TE_sirenF_logit <- lm(logit(pro_24_sirenF) ~ sample_type*category, TE_data_sirenF)
+anova(model_TE_sirenF_logit)
+```
+
+```{r}
+est_TES_sirenF <- emmeans(model_TE_sirenF_logit, pairwise ~ sample_type | category) 
+est_TES_sirenF$contrasts %>% 
+  as.data.frame() %>% 
+  select(contrast, category, p.value)
+```
+
+* Gypsy: sperm - zygote: 0
+* Gypsy: egg - zygote: 2e-9
+* Gypsy: seedling - zygote: 8e-12
+
+* TIR: egg - zygote: 8e-4
+* TIR: seedling - zygote: 3e-10
+
+```{r}
+TE_results_sirenF <- multcomp::cld(est_TES_sirenF$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_replace_all(.group, " ", "")) %>% 
+  mutate(grouping = case_when(
+    str_detect(category, "Gypsy") ~ toupper(grouping),
+    T ~ grouping
+    )) %>% 
+  select(sample_type, category, grouping)
+
+TE_results_sirenF
+```
+
+### zygote and egg sets (siren reads included)
+```{r}
+zygote_egg_data <- length_data %>% 
+  filter(length == 24) %>% 
+  filter(category == "egg siRNA loci\n(minus zygote siRNA loci)" |
+           category == "zygote siRNA loci\n(minus egg siRNA loci)" |
+           category == "zygote/egg\nloci intersect") %>% 
+  select(sample_ID, sample_type, proportion, pro_24,category) %>% 
+  filter(sample_type == "egg"|
+          # sample_type == "embryo 7-8 DAF" |
+           sample_type == "sperm"|
+           sample_type == "seedling shoot"|
+           sample_type == "zygote" |
+           sample_type == "ovary" |
+           sample_type == "ovary_9hap") %>% 
+    mutate(sample_type = case_when(
+    str_detect(sample_type, "seedling") ~ "seedling",
+    str_detect(sample_type, "embryo") ~ "*embryo", 
+    str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
+    str_detect(sample_type, "ovary") & 
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)",
+    T ~ sample_type
+  ))
+
+head(zygote_egg_data, 10)
+```
+ 
+
+```{r}
+zygote_egg_data %>% 
+  group_by(category, sample_type) %>% 
+  summarise(mean = mean(pro_24))
+```
+
+* egg NOT zygote: egg vs. zygote: 22% vs. 2%
+* zygote NOT egg: egg vs. zygote: 2% vs.21%
+* zygote NOT egg: OV: ~6% 
+
+```{r}
+model_zygote_logit <- lm(logit(pro_24) ~ sample_type*category, zygote_egg_data)
+anova(model_zygote_logit)
+```
+
+```{r}
+est_zygote <- emmeans(model_zygote_logit, pairwise ~ sample_type | category) 
+est_zygote$contrasts %>% 
+  as.data.frame() %>% 
+  select(contrast, category, estimate, p.value, SE, df)
+```
+
+* egg NOT zygote: egg-zygote: 0
+* egg NOT zygote: OV: NS
+
+* zygote NOT egg: egg-zygote: 0
+* zygote NOT egg: OV: NS
+
+* intersect: NS for both 
+
+```{r}
+zygote_results <- multcomp::cld(est_zygote$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_replace_all(.group, " ", "")) %>% 
+  select(sample_type, category, grouping)
+
+zygote_results
+```
+
+### zygote egg sets sirenF
+
+```{r}
+#things needs to be normalized to sirenF reads counts 
+zygote_egg_data_sirenF <- length_data %>% 
+  filter(length == 24) %>%
+  filter(str_detect(category, "siren siRNAs exclu") &
+           str_detect(category, "sig|DRM2|TIR|Gypsy") == F) %>% 
+  inner_join(lengths_summary_sirenF_sam %>% 
+               identify_samples2() %>%
+               select(-X1), by = "sample_ID") %>% 
+  mutate(pro_24_sirenF = count / `24.y`) %>% 
+  select(sample_ID, sample_type, pro_24_sirenF, category) %>% 
+  filter(sample_type == "egg"|
+          # sample_type == "embryo 7-8 DAF" |
+           sample_type == "sperm"|
+           sample_type == "seedling shoot"|
+           sample_type == "zygote" |
+           sample_type == "ovary" |
+           sample_type == "ovary_9hap") %>% 
+    mutate(sample_type = case_when(
+    str_detect(sample_type, "seedling") ~ "seedling",
+    str_detect(sample_type, "embryo") ~ "*embryo", 
+    str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
+    str_detect(sample_type, "ovary") & 
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)",
+    T ~ sample_type
+  ))
+
+head(zygote_egg_data_sirenF)
+```
+```{r}
+zygote_egg_data_sirenF %>% 
+  group_by(category, sample_type) %>% 
+  summarise(mean = mean(pro_24_sirenF))
+```
+* egg NOT zygote: egg vs. zygote: 40% vs. 3%
+* zygote NOT egg: egg vs. zygote: 4% vs.36%
+* zygote NOT egg: OV: ~13% 
+
+```{r}
+model_zygote_sirenF_logit <- lm(logit(pro_24_sirenF) ~ sample_type*category, zygote_egg_data_sirenF)
+anova(model_zygote_sirenF_logit)
+```
+
+```{r}
+est_zygote_sirenF <- emmeans(model_zygote_sirenF_logit, pairwise ~ sample_type | category) 
+est_zygote_sirenF$contrasts %>% 
+  as.data.frame() %>% 
+  select(contrast, category, p.value, estimate, SE, df)
+```
+
+* Egg NOT zygote: egg-zygote: 0
+* Egg NOT zygote: OV: 0.03
+
+* Zygote NOT egg: egg-zygote: 0
+* Zygote NOT egg: OV: NS
+
+* Intersect: egg-zygote:0.02
+* Intersect: OV: NS 
+
+```{r}
+zygote_sirenF_results <- multcomp::cld(est_zygote_sirenF$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_replace_all(.group, " ", "")) %>% 
+  select(sample_type, category, grouping)
+
+zygote_sirenF_results
+```
+
+
+## plot 
+### TE 
+```{r}
+annotate_TE1 <- data.frame(
+    xmin = 5.1,
+    xmax = 5.9
+  ) %>% 
+  mutate(category = "TIR") %>% 
+  mutate(sample_type = "seedling" ) %>% 
+  mutate(pro_24 = 0.25) %>% 
+  mutate(text = "5e-10") %>% 
+  mutate(vjust = 2)%>% 
+  mutate(hjust = -0.08)
+
+annotate_TE3 <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "TIR") %>% 
+  mutate(sample_type = "zygote" ) %>% 
+  mutate(pro_24 = 0.18) %>% 
+  mutate(text = "1.4e-3") %>% 
+  mutate(vjust = 2)%>% 
+  mutate(hjust = -0.08)
+
+annotate_TE2 <-  data.frame(
+    xmin = 1.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "Gypsy") %>% 
+  mutate(sample_type = "zygote" ) %>% 
+  mutate(pro_24 = 0.36) %>% 
+  mutate(text = "0") %>% 
+  mutate(vjust = 6)%>% 
+  mutate(hjust = -0.4)
+
+annotate_TE4 <-  data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "Gypsy") %>% 
+  mutate(sample_type = "zygote" ) %>% 
+  mutate(pro_24 = 0.18) %>% 
+  mutate(text = "9e-7") %>% 
+  mutate(vjust = 2)%>% 
+  mutate(hjust = -0.08)
+
+annotate_TE5 <-  data.frame(
+    xmin = 5.1,
+    xmax = 5.9
+  ) %>% 
+  mutate(category = "Gypsy") %>% 
+  mutate(sample_type = "seedling" ) %>% 
+  mutate(pro_24 = 0.12) %>% 
+  mutate(text = "9e-4") %>% 
+  mutate(vjust = 2)%>% 
+  mutate(hjust = -0.08)
+
+annotate_TE <- rbind(
+   annotate_TE1,
+   annotate_TE2,
+   annotate_TE3,
+   annotate_TE4,
+   annotate_TE5
+) %>% 
+  mutate(category = factor(category, levels = c("TIR", "Gypsy")))
+
+TE_data %>% 
   mutate(sample_type = factor(sample_type, levels = rev(c(
-      "seedling", "embryo", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
   )))) %>%  
   mutate(category = factor(category, levels = c("TIR", "Gypsy"))) %>% 
-  ggplot(aes(x = sample_type, y = proportion*100 )) +
+  ggplot(aes(x = sample_type, y = pro_24*100)) +
   facet_grid(. ~ category, scales = "free_y") +
   geom_bar(stat = "summary", fun = mean, aes(fill = sample_type), alpha = 0.8, width =0.7) +
   geom_point(aes(fill = sample_type), color = "white", shape = 21, alpha = 0.8, 
              position = position_jitter(0.1, seed = 666), size = 2) +
   geom_text(data = TE_results,
-            aes(label = grouping), size = 4, fontface = "bold", y = 0,
+            aes(label = grouping), size = 3.5, fontface = "bold", y = 0,
             hjust = 0) +
   geom_errorbarh(data = annotate_TE, aes(xmin = xmin, xmax = xmax),
-                  size = 1, height = 1) +
+                  size = 1, height = 2) +
   geom_text(data = annotate_TE, aes(label = text, hjust = hjust, vjust = vjust),
-            size = 4, fontface = "bold") +
-  scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "orangered3", "coral4", "dodgerblue2"),
+            size = 3.5, fontface = "bold") +
+  scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "coral4","orangered3",  "dodgerblue2"),
                     limits = c(
-      "seedling", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
   )) +  
   labs(fill = NULL,
        x = "siRNA trancriptome",
-       y = "24-nt siRNA (% of total siRNA)") +
+       y = "24-nt siRNA (% total 24-nt siRNA)") +
   guides(fill = guide_legend(ncol = 2)) +
   theme_minimal() +
   theme(text = element_text(size= 14, face="bold")) +
@@ -505,147 +903,158 @@ length_data %>%
         panel.grid.minor.y = element_blank()) +
   theme(legend.position = "top") +
   theme(strip.placement = "outside") +
-  theme(panel.spacing = unit(0.5, "line")) +
+  theme(panel.spacing = unit(0.8, "line")) +
   coord_flip()
 
 ggsave(filename = "siRNA_24_TE_bar.svg", width = 3.5, height = 4) 
 ggsave(filename = "siRNA_24_TE_bar.png", width = 3.5, height = 4) 
 ```
 
-### zygote and egg 
+### TE (siren excluded)
 ```{r}
-annotate_egg_NOT1 <- data.frame(
-    xmin = 4,
-    xmax = 5
+annotate_TE1_sirenF <- data.frame(
+    xmin = 5.1,
+    xmax = 5.9
   ) %>% 
-  mutate(category = "egg NOT zygote\nloci") %>% 
-  mutate(sample_type = "egg" ) %>% 
-  mutate(proportion = 0.075) %>% 
-  mutate(text = "4e-14") %>% 
-  mutate(vjust = -0.8) %>% 
-  mutate(hjust = -0.1) %>% 
-  mutate(height = 0.5)
+  mutate(category = "TIR\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "seedling" ) %>% 
+  mutate(pro_24_sirenF = 0.33) %>% 
+  mutate(text = "3e-10") %>% 
+  mutate(vjust = 2)%>% 
+  mutate(hjust = -0.08)
 
-annotate_egg_NOT2 <-  data.frame(
-    xmin = 2,
-    xmax = 3
+annotate_TE3_sirenF <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
   ) %>% 
-  mutate(category = "egg NOT zygote\nloci") %>% 
-  mutate(sample_type = "ovary (9hap)" ) %>% 
-  mutate(proportion = 0.025) %>% 
-  mutate(text = "NS") %>% 
-  mutate(vjust = -0.8) %>% 
-  mutate(hjust = -0.2) %>% 
-  mutate(height = 0.5)
+  mutate(category = "TIR\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "zygote" ) %>% 
+  mutate(pro_24_sirenF = 0.28) %>% 
+  mutate(text = "8e-4") %>% 
+  mutate(vjust = 2)%>% 
+  mutate(hjust = -0.08)
 
-annotate_zygote_NOT1 <- data.frame(
-    xmin = 4,
-    xmax = 5
+annotate_TE2_sirenF <-  data.frame(
+    xmin = 1.1,
+    xmax = 4.9
   ) %>% 
-  mutate(category = "zygote NOT egg\nloci") %>% 
-  mutate(sample_type = "egg" ) %>% 
-  mutate(proportion = 0.08) %>% 
-  mutate(text = "4e-14") %>% 
-  mutate(vjust = -0.8) %>% 
-  mutate(hjust = -0.1) %>% 
-  mutate(height = 0.5)
+  mutate(category = "Gypsy\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "zygote" ) %>% 
+  mutate(pro_24_sirenF = 0.36) %>% 
+  mutate(text = "0") %>% 
+  mutate(vjust = 6)%>% 
+  mutate(hjust = -0.4)
 
-annotate_zygote_NOT2 <-  data.frame(
-    xmin = 2,
-    xmax = 3
+annotate_TE4_sirenF <-  data.frame(
+    xmin = 4.1,
+    xmax = 4.9
   ) %>% 
-  mutate(category = "zygote NOT egg\nloci") %>% 
-  mutate(sample_type = "ovary (9hap)" ) %>% 
-  mutate(proportion = 0.04) %>% 
-  mutate(text = "NS") %>% 
-  mutate(vjust = -0.8) %>% 
-  mutate(hjust = -0.2) %>% 
-  mutate(height = 0.5)
+  mutate(category = "Gypsy\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "zygote" ) %>% 
+  mutate(pro_24_sirenF = 0.18) %>% 
+  mutate(text = "2e-9") %>% 
+  mutate(vjust = 2)%>% 
+  mutate(hjust = -0.08)
 
-annotate_inter_NOT1 <-  data.frame(
-    xmin = 2,
-    xmax = 3
+annotate_TE5_sirenF <-  data.frame(
+    xmin = 5.1,
+    xmax = 5.9
   ) %>% 
-  mutate(category = "zygote/egg\nintersect") %>% 
-  mutate(sample_type = "ovary (9hap)" ) %>% 
-  mutate(proportion = 0.35) %>% 
-  mutate(text = "NS") %>% 
-  mutate(vjust = -0.8) %>% 
-  mutate(hjust = -0.2) %>% 
-  mutate(height = 2) 
+  mutate(category = "Gypsy\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "seedling" ) %>% 
+  mutate(pro_24_sirenF = 0.12) %>% 
+  mutate(text = "8e-12") %>% 
+  mutate(vjust = 2)%>% 
+  mutate(hjust = -0.08)
 
-
-annotate_inter_NOT2 <-  data.frame(
-    xmin = 4,
-    xmax = 5
-  ) %>% 
-  mutate(category = "zygote/egg\nintersect") %>% 
-  mutate(sample_type = "egg" ) %>% 
-  mutate(proportion = 0.3) %>% 
-  mutate(text = "NS") %>% 
-  mutate(vjust = -0.8) %>% 
-  mutate(hjust = -0.2) %>% 
-  mutate(height = 2) 
-
-annotate_NOT <- rbind(
-  annotate_egg_NOT1,
-  annotate_egg_NOT2,
-  annotate_zygote_NOT1,
-  annotate_zygote_NOT2,
-  annotate_inter_NOT1,
-  annotate_inter_NOT2
+annotate_TE_sirenF <- rbind(
+   annotate_TE1_sirenF,
+   annotate_TE2_sirenF,
+   annotate_TE3_sirenF,
+   annotate_TE4_sirenF,
+   annotate_TE5_sirenF
 ) %>% 
-  mutate(category = factor(category, levels = c(
-    "egg NOT zygote\nloci", "zygote/egg\nintersect" ,"zygote NOT egg\nloci"
-    ))) 
+  mutate(category = factor(category, levels = c("TIR\n(siren siRNAs excluded)", 
+                                                "Gypsy\n(siren siRNAs excluded)"))) 
+
+TE_data_sirenF %>% 
+  mutate(sample_type = factor(sample_type, levels = rev(c(
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
+  )))) %>%  
+  mutate(category = factor(category, levels = c("TIR\n(siren siRNAs excluded)", 
+                                                "Gypsy\n(siren siRNAs excluded)"))) %>% 
+  ggplot(aes(x = sample_type, y = pro_24_sirenF*100)) +
+  facet_grid(. ~ category, scales = "free_y") +
+  geom_bar(stat = "summary", fun = mean, aes(fill = sample_type), alpha = 0.8, width =0.7) +
+  geom_point(aes(fill = sample_type), color = "white", shape = 21, alpha = 0.8, 
+             position = position_jitter(0.1, seed = 666), size = 2) +
+  geom_text(data = TE_results_sirenF,
+            aes(label = grouping), size = 3.5, fontface = "bold", y = 0,
+            hjust = 0) +
+  geom_errorbarh(data = annotate_TE_sirenF, aes(xmin = xmin, xmax = xmax),
+                  size = 1, height = 2) +
+  geom_text(data = annotate_TE_sirenF, aes(label = text, hjust = hjust, vjust = vjust),
+            size = 3.5, fontface = "bold") +
+  scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "coral4","orangered3",  "dodgerblue2"),
+                    limits = c(
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
+  )) +  
+  labs(fill = NULL,
+       x = "siRNA trancriptome",
+       y = "24-nt siRNA (% non-siren 24-nt siRNA)") +
+  guides(fill = guide_legend(ncol = 2)) +
+  theme_minimal() +
+  theme(text = element_text(size= 14, face="bold")) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_blank())  +
+  theme(axis.line = element_line(size = 1.1)) +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()) +
+  theme(legend.position = "top") +
+  theme(strip.placement = "outside") +
+  theme(panel.spacing = unit(0.8, "line")) +
+  coord_flip()
+
+ggsave(filename = "siRNA_24_TE_bar_sirenF.svg", width = 4, height = 4) 
+ggsave(filename = "siRNA_24_TE_bar_sirenF.png", width = 4, height = 4)
 ```
 
+### egg siren loci
 ```{r}
-length_data %>% 
-  filter(genotype == "WT") %>% 
-  filter(length == 24) %>% 
+siren_graph <- siren_counts %>% 
   filter(sample_type == "egg"|
+          # sample_type == "embryo 7-8 DAF" |
            sample_type == "sperm"|
            sample_type == "seedling shoot"|
            sample_type == "zygote" |
            sample_type == "ovary" |
-           sample_type == "ovary_9hap" ) %>% 
-  filter(str_detect(category, "siren") == F) %>% 
-  filter(str_detect(category, "NOT") | 
-                      str_detect(category, "zygote/egg\ninter")) %>%
+           sample_type == "ovary_9hap") %>%
+  mutate(category = "egg siren loci\n(n = 1881)") %>% 
   mutate(sample_type = case_when(
     str_detect(sample_type, "seedling") ~ "seedling",
     str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
     str_detect(sample_type, "ovary") & 
-      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" ,
-    str_detect(sample_type, "embryo") ~ "embryo",
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" , 
     T ~ sample_type
   )) %>% 
   mutate(sample_type = factor(sample_type, levels = rev(c(
-      "seedling", "embryo", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
   )))) %>%  
-  mutate(category = factor(category, levels = c(
-    "egg NOT zygote\nloci", "zygote/egg\nintersect" ,"zygote NOT egg\nloci"
-    ))) %>% 
-  ggplot(aes(x = sample_type, y = proportion*100 )) +
-  facet_grid(. ~ category, scales = "free_x") +
+  ggplot(aes(x = sample_type, y = pro24*100)) +
+  facet_wrap(~ category) +
   geom_bar(stat = "summary", fun = mean, aes(fill = sample_type), alpha = 0.8, width =0.7) +
   geom_point(aes(fill = sample_type), color = "white", shape = 21, alpha = 0.8, 
              position = position_jitter(0.1, seed = 666), size = 2) +
-  geom_text(data = NOT_results,
-            aes(label = grouping), size = 4, fontface = "bold", y = 0,
+  geom_text(data = siren_count_results,
+            aes(label = grouping), size = 3.5, fontface = "bold", y = 0,
             hjust = 0) +
-  geom_errorbarh(data = annotate_NOT, aes(xmin = xmin, xmax = xmax, height = height),
-                  size = 1) +
-  geom_text(data = annotate_NOT, aes(label = text, vjust = vjust, hjust = hjust), 
-            size = 4, fontface = "bold") +
   scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "orangered3", "coral4", "dodgerblue2"),
                     limits = c(
       "seedling", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
   )) +  
   labs(fill = NULL,
        x = "siRNA trancriptome",
-       y = "24-nt siRNA (% of total siRNA)") +
+       y = "24-nt siRNA\n(% total 24-nt siRNA)") +
   guides(fill = guide_legend(ncol = 2)) +
   theme_minimal() +
   theme(text = element_text(size= 14, face="bold")) +
@@ -656,97 +1065,295 @@ length_data %>%
         panel.grid.minor.y = element_blank()) +
   theme(legend.position = "none") +
   theme(strip.placement = "outside") +
-  theme(panel.spacing = unit(1, "line")) +
   coord_flip()
 
-ggsave(filename = "siRNA_24_NOT_bar.svg", width = 8, height = 3)
-ggsave(filename = "siRNA_24_NOT_bar.png", width = 8, height = 3)
+siren_graph
+ggsave("siRNA_24_egg_siren_bar.svg", height = 3, width = 3.5)
+ggsave("siRNA_24_egg_siren_bar.png", height = 3, width = 3.5)
 ```
+
+### zygote and egg 
 ```{r}
-length_data %>% 
-  filter(genotype == "WT") %>% 
-  filter(length == 24) %>% 
-  filter(sample_type == "egg"|
-           sample_type == "sperm"|
-           sample_type == "seedling shoot"|
-           sample_type == "zygote" |
-           sample_type == "ovary" |
-           sample_type == "ovary_9hap" ) %>% 
-  filter(str_detect(category, "siren") == F) %>% 
-  filter(str_detect(category, "NOT")) %>%
-  mutate(sample_type = case_when(
-    str_detect(sample_type, "seedling") ~ "seedling",
-    str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
-    str_detect(sample_type, "ovary") & 
-      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" ,
-    str_detect(sample_type, "embryo") ~ "embryo",
-    T ~ sample_type
-  )) %>% 
+annotate_egg_NOT1 <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "E loci - Z loci") %>% 
+  mutate(sample_type = "egg" ) %>% 
+  mutate(pro_24 = 0.15) %>% 
+  mutate(text = "P = 0") %>% 
+  mutate(vjust = -0.2) %>% 
+  mutate(hjust = -0.4) %>% 
+  mutate(height = 1)
+
+annotate_zygote_NOT1 <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "Z loci - E loci") %>% 
+  mutate(sample_type = "egg" ) %>% 
+  mutate(pro_24 = 0.15) %>% 
+  mutate(text = "P = 0") %>% 
+  mutate(vjust = -0.2) %>% 
+  mutate(hjust = -0.4) %>% 
+  mutate(height = 1)
+
+annotate_NOT <- rbind(
+  annotate_egg_NOT1,
+  annotate_zygote_NOT1
+) %>% 
+  mutate(category = factor(category, levels = c(
+   "E loci - Z loci", 
+   "Z/E loci intersect", 
+   "Z loci - E loci"
+    ))) 
+ 
+zygote_egg_graph <- zygote_egg_data %>% 
   mutate(sample_type = factor(sample_type, levels = rev(c(
-      "seedling", "embryo", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
   )))) %>%  
-  ggplot(aes(x = sample_type, y = proportion*100 )) +
-  facet_grid(category ~. , scales = "free_y", switch = "y") +
+ mutate(category2 = case_when(
+   str_detect(category, "egg siRNA loci\n") ~ "E loci - Z loci", 
+   str_detect(category, "zygote siRNA loci\n") ~ "Z loci - E loci",
+   str_detect(category, "zygote/egg") ~ "Z/E loci intersect"
+ )) %>% 
+ mutate(category = factor(category2, levels = c(
+   "E loci - Z loci", 
+   "Z/E loci intersect", 
+   "Z loci - E loci"
+    ))) %>% 
+  ggplot(aes(x = sample_type, y = pro_24*100 )) +
+  facet_wrap(~ category, scales = "free_x", ncol = 4) +
   geom_bar(stat = "summary", fun = mean, aes(fill = sample_type), alpha = 0.8, width =0.7) +
   geom_point(aes(fill = sample_type), color = "white", shape = 21, alpha = 0.8, 
              position = position_jitter(0.1, seed = 666), size = 2) +
-  geom_text(data = NOT_results %>% 
-                   filter(str_detect(category, "NOT")),
+  geom_text(data = zygote_results %>% 
+              mutate(category2 = case_when(
+   str_detect(category, "egg siRNA loci\n") ~ "E loci - Z loci", 
+   str_detect(category, "zygote siRNA loci\n") ~ "Z loci - E loci",
+   str_detect(category, "zygote/egg") ~ "Z/E loci intersect"
+ )) %>% 
+ mutate(category = factor(category2, levels = c(
+   "E loci - Z loci", 
+   "Z/E loci intersect", 
+   "Z loci - E loci"
+    ))),
             aes(label = grouping), size = 4, fontface = "bold", y = 0,
             hjust = 0) +
-  geom_errorbarh(data = annotate_NOT %>% 
-                   filter(str_detect(category, "NOT")), aes(xmin = xmin, xmax = xmax),
-                  size = 1, height = 0.3) +
-  geom_text(data = annotate_NOT %>%
-                   filter(str_detect(category, "NOT")), aes(label = text, vjust = vjust, hjust = hjust), 
-            size = 4, fontface = "bold") +
+ geom_errorbarh(data = annotate_NOT, aes(xmin = xmin, xmax = xmax, height = height),
+              size = 1) +
+ geom_text(data = annotate_NOT, aes(label = text, vjust = vjust, hjust = hjust),
+           size = 4, fontface = "bold") +
   scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "orangered3", "coral4", "dodgerblue2"),
                     limits = c(
       "seedling", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
   )) +  
   labs(fill = NULL,
+       x = "siRNA transcriptome",
+       y = "24-nt siRNA (% total 24-nt siRNA)") +
+  guides(fill = guide_legend(ncol = 2)) +
+  theme_minimal() +
+  theme(text = element_text(size= 14, face="bold")) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  theme(axis.line = element_line(size = 1.1)) +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()) +
+  theme(legend.position = "none") +
+  theme(strip.placement = "outside") +
+  theme(panel.spacing = unit(0.8, "line")) +
+  coord_flip()
+  
+zygote_egg_graph
+ggsave(filename = "siRNA_24_NOT_bar.svg", width = 7, height = 3)
+ggsave(filename = "siRNA_24_NOT_bar.png", width = 7, height = 3)
+```
+
+ 
+
+
+### zygote and egg sirenF
+```{r}
+annotate_egg_NOT1_sirenF <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "E loci - Z loci\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "egg" ) %>% 
+  mutate(pro_24_sirenF = 0.25) %>% 
+  mutate(text = "P = 0") %>% 
+  mutate(vjust = -0.8) %>% 
+  mutate(hjust = -0.1) %>% 
+  mutate(height = 2)
+
+annotate_zygote_NOT1_sirenF <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "Z loci - E loci\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "egg" ) %>% 
+  mutate(pro_24_sirenF = 0.25) %>% 
+  mutate(text = "P = 0") %>% 
+  mutate(vjust = -0.8) %>% 
+  mutate(hjust = -0.4) %>% 
+  mutate(height = 2)
+
+annotate_NOT_sirenF <- rbind(
+  annotate_egg_NOT1_sirenF,
+  annotate_zygote_NOT1_sirenF
+) %>%
+  mutate(category = factor(category, levels = c(
+   "E loci - Z loci\n(siren siRNAs excluded)", 
+   "Z/E loci intersect\n(siren siRNAs excluded)", 
+   "Z loci - E loci\n(siren siRNAs excluded)"
+    ))) 
+ 
+zygote_egg_data_sirenF %>% 
+  mutate(sample_type = factor(sample_type, levels = rev(c(
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
+  )))) %>%  
+  mutate(category2 = case_when(
+   str_detect(category, "egg siRNA loci\n") ~ "E loci - Z loci\n(siren siRNAs excluded)", 
+   str_detect(category, "zygote siRNA loci\n") ~ "Z loci - E loci\n(siren siRNAs excluded)",
+   str_detect(category, "zygote/egg") ~ "Z/E loci intersect\n(siren siRNAs excluded)"
+ )) %>% 
+ mutate(category = factor(category2, levels = c(
+   "E loci - Z loci\n(siren siRNAs excluded)", 
+   "Z/E loci intersect\n(siren siRNAs excluded)", 
+   "Z loci - E loci\n(siren siRNAs excluded)"
+    ))) %>% 
+  ggplot(aes(x = sample_type, y = pro_24_sirenF*100 )) +
+  facet_wrap(~ category, scales = "free_x", ncol = 4) +
+  geom_bar(stat = "summary", fun = mean, aes(fill = sample_type), alpha = 0.8, width =0.7) +
+  geom_point(aes(fill = sample_type), color = "white", shape = 21, alpha = 0.8, 
+             position = position_jitter(0.1, seed = 666), size = 2) +
+  geom_text(data = zygote_sirenF_results %>% 
+              mutate(category2 = case_when(
+   str_detect(category, "egg siRNA loci\n") ~ "E loci - Z loci\n(siren siRNAs excluded)", 
+   str_detect(category, "zygote siRNA loci\n") ~ "Z loci - E loci\n(siren siRNAs excluded)",
+   str_detect(category, "zygote/egg") ~ "Z/E loci intersect\n(siren siRNAs excluded)"
+ )) %>% 
+ mutate(category = factor(category2, levels = c(
+   "E loci - Z loci\n(siren siRNAs excluded)", 
+   "Z/E loci intersect\n(siren siRNAs excluded)", 
+   "Z loci - E loci\n(siren siRNAs excluded)"
+    ))),
+            aes(label = grouping), size = 4, fontface = "bold", y = 0,
+            hjust = 0) +
+  geom_errorbarh(data = annotate_NOT_sirenF, aes(xmin = xmin, xmax = xmax, height = height),
+              size = 1) +
+  geom_text(data = annotate_NOT_sirenF, aes(label = text, vjust = vjust, hjust = hjust),
+           size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "orangered3", "coral4", "dodgerblue2"),
+                    limits = c(
+      "seedling", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
+  )) +  
+  labs(fill = NULL,
+       x = "siRNA transcriptome",
+       y = "24-nt siRNA (% non-siren 24-nt siRNA)") +
+  guides(fill = guide_legend(ncol = 2)) +
+  theme_minimal() +
+  theme(text = element_text(size= 14, face="bold")) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) + 
+  theme(axis.line = element_line(size = 1.1)) +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()) +
+  theme(legend.position = "none") +
+  theme(strip.placement = "outside") +
+  theme(panel.spacing = unit(0.8, "line")) +
+  coord_flip()
+
+ggsave(filename = "siRNA_24_NOT_bar_sirenF.svg", width = 7.2, height = 3)
+ggsave(filename = "siRNA_24_NOT_bar_sirenF.png", width = 7.2, height = 3)
+```
+ 
+
+
+```{r}
+zygote_egg_data %>% 
+  filter(category != "zygote/egg\nloci intersect") %>% 
+  mutate(sample_type = factor(sample_type, levels = rev(c(
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
+  )))) %>%  
+  mutate(category2 = case_when(
+   str_detect(category, "egg siRNA loci\n") ~ "E loci - Z loci", 
+   str_detect(category, "zygote siRNA loci\n") ~ "Z loci - E loci",
+   str_detect(category, "zygote/egg") ~ "Z/E loci intersect"
+ )) %>% 
+ mutate(category = factor(category2, levels = c(
+   "E loci - Z loci", 
+   "Z/E loci intersect", 
+   "Z loci - E loci"
+    ))) %>% 
+  ggplot(aes(x = sample_type, y = pro_24*100 )) +
+  facet_grid(category ~., scales = "free_x", switch = "y") +
+  geom_bar(stat = "summary", fun = mean, aes(fill = sample_type), alpha = 0.8, width =0.7) +
+  geom_point(aes(fill = sample_type), color = "white", shape = 21, alpha = 0.8, 
+             position = position_jitter(0.1, seed = 666), size = 2) +
+  geom_text(data = zygote_results %>% 
+              filter(category != "zygote/egg\nloci intersect") %>% 
+              mutate(category2 = case_when(
+   str_detect(category, "egg siRNA loci\n") ~ "E loci - Z loci", 
+   str_detect(category, "zygote siRNA loci\n") ~ "Z loci - E loci",
+   str_detect(category, "zygote/egg") ~ "Z/E loci intersect"
+ )) %>% 
+ mutate(category = factor(category2, levels = c(
+   "E loci - Z loci", 
+   "Z/E loci intersect", 
+   "Z loci - E loci"
+    ))),
+            aes(label = grouping), size = 4, fontface = "bold", y = 0,
+            hjust = 0) +
+ geom_errorbarh(data = annotate_NOT, aes(xmin = xmin, xmax = xmax, height = height),
+              size = 1) +
+ geom_text(data = annotate_NOT, aes(label = text, vjust = vjust, hjust = hjust),
+           size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "coral4", "orangered3", "dodgerblue2"),
+                    limits = c(
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)", "sperm"
+  )) +  
+  labs(fill = NULL,
        x = NULL,
-       y = "24-nt siRNA (% of total siRNA)") +
+       y = "24-nt siRNA (% total 24-nt siRNA)") +
   guides(fill = guide_legend(ncol = 2)) +
   theme_minimal() +
   theme(text = element_text(size= 14, face="bold")) +
   theme(axis.text.x = element_text(colour = "black")) +
   theme(axis.text.y = element_blank()) +
-  theme(axis.line = element_line(size = 1.1)) +
+  theme(axis.line = element_line(size = 1)) +
   theme(panel.grid.major.y = element_blank(),
         panel.grid.minor.y = element_blank()) +
   theme(legend.position = "top") +
   theme(strip.placement = "outside") +
-  theme(panel.spacing = unit(1, "line")) +
+  theme(panel.spacing = unit(0.6, "line")) +
   coord_flip()
 
-ggsave(filename = "siRNA_24_NOT_bar_thin.svg", width = 4, height = 5)
-ggsave(filename = "siRNA_24_NOT_bar_thin.png", width = 4, height = 5)
+ggsave(filename = "siRNA_24_NOT_bar_thin.svg", width = 3.5, height = 5.6)
+ggsave(filename = "siRNA_24_NOT_bar_thin.png", width = 3.5, height = 5.6)
 ```
+ 
 
-## stat for seedling and sperm specific loci 
+## seedling and sperm signature loci 
 ```{r}
 specific_data <- length_data %>% 
-  filter(genotype == "WT") %>% 
- filter(sample_type == "egg"|
+  filter(length == 24) %>% 
+  filter(str_detect(category, "signature|inter")) %>%
+  filter(str_detect(category, "siren|zygote") == F) %>%
+  select(sample_ID, sample_type, proportion, pro_24,category) %>% 
+  filter(sample_type == "egg"|
            sample_type == "sperm"|
            sample_type == "seedling shoot"|
            sample_type == "zygote" |
            sample_type == "ovary" |
-           sample_type == "ovary_9hap" 
-           ) %>% 
+           sample_type == "ovary_9hap") %>% 
   mutate(sample_type = case_when(
     str_detect(sample_type, "seedling") ~ "seedling",
     str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
     str_detect(sample_type, "ovary") & 
-      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" , 
-    str_detect(sample_type, "embryo") ~ "embryo",
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)",
     T ~ sample_type
-  )) %>% 
-  filter(length == 24) %>% 
-  filter(str_detect(id, "specific|intersect")) %>% 
-  filter(category == "seedling-specific\nloci" |
-           category == "sperm-specific\nloci")  
+  ))   
 
 head(specific_data)
 ```
@@ -754,177 +1361,187 @@ head(specific_data)
 ### summary stats for seedling- and sperm- specific data 
 ```{r}
 specific_data %>% 
-  filter(category == "seedling-specific\nloci" |
-           category == "sperm-specific\nloci")  %>% 
+  #filter(category == "seedling-specific\nloci" |
+   #        category == "sperm-specific\nloci")  %>% 
   group_by(category, sample_type) %>% 
   summarise(
-    mean = mean(proportion)
-  ) %>% 
-  spread(category, mean)
+    mean = mean(pro_24)
+  ) 
 ```
+* egg specific
+** zygote vs. egg: 1% vs. 8% 
 
 * seedling specific: 
-** ovary 9hr vs 0hr: 0.1 / 0.08 = 1.25x 
-** zygote vs. egg: 0.078 / 0.036 = 2.16x 
+** ovary 9hr vs 0hr: 0.08 / 0.06 
+** zygote vs. egg: 0.084/ 0.018 
 
 * sperm specific: 
-** ovary 9hr vs 0hr: 0.0072 / 0.0015 = 0.48x 
-** zygote vs. egg: 0.013 / 0.036 = 0.36x  
-** zygote vs. sperm: 0.013 / 0.2 = 0.065x 
+** zygote vs. egg: 0.024 / 0.038  
+** zygote vs. sperm: 0.024 / 0.3  
 
 ### linear models 
 ```{r}
-model_spec_24 <- lm(proportion ~ category * sample_type, data = specific_data)
-anova(model_spec_24)
+model_spec_24_logit <- lm(logit(pro_24) ~ category * sample_type, data = specific_data)
+                          
 
-#plot(model_spec_24)
-```
-
-```{r}
-model_spec_24_logit <- lm(logit(proportion) ~  sample_type * category, data = specific_data)
 anova(model_spec_24_logit)
-
-#plot(model_spec_24_logit)
 ```
-
-
-```{r}
-est_spec_24 <- emmeans(model_spec_24, pairwise ~ sample_type | category)
-spec_results <- multcomp::cld(est_spec_24$emmeans, Letters = letters) %>% 
-  as.data.frame() %>% 
-  mutate(grouping = str_remove_all(.group, " ")) 
  
-spec_results
-```
-```{r}
-est_spec_24$contrasts %>% 
-  as.data.frame() 
-  
-```
-
 
 ```{r}
 est_spec_24_logit <- emmeans(model_spec_24_logit, pairwise ~ sample_type | category)
 spec_results_logit <- multcomp::cld(est_spec_24_logit$emmeans, Letters = letters) %>% 
   as.data.frame() %>% 
-  mutate(grouping = str_remove_all(.group, " ")) 
+  mutate(grouping = str_remove_all(.group, " ")) %>% 
+  select(sample_type, category, grouping)
  
 spec_results_logit
 ```
+
 ```{r}
 est_spec_24_logit$contrasts %>% 
-  as.data.frame() 
+  as.data.frame() %>% 
+  select(contrast, category, p.value)
 ```
-* seedling spec: egg vs. zygote = 3e-3
+
+* egg spec: egg vs. zygote = 6e-14 
+
+* seedling spec: egg vs. zygote = 1.3e-13
 * seedling spec: ovary = NS 
 
-* sperm spec: zygote vs sperm = 0
-* sperm spec: ovary = 0.14
-* sperm spec: zygote vs egg = 0.019
+* sperm spec: zygote vs sperm = 4e-13
+* sperm spec: zygote vs egg = NS
 
-## plot 
+## seedling-spec, sperm-spec  (siren siRNAs excluded)
 ```{r}
-annotate_seedling_spec1 <- data.frame(
-    xmin = 4,
-    xmax = 5
-  ) %>% 
-  mutate(category = "seedling-specific\nloci") %>% 
-  mutate(sample_type = "egg" ) %>% 
-  mutate(proportion = 0.1) %>% 
-  mutate(text = "3e-3") %>% 
-  mutate(vjust = -1.5) %>% 
-  mutate(hjust = -0.15)
-
-annotate_seedling_spec2 <-  data.frame(
-    xmin = 2,
-    xmax = 3
-  ) %>% 
-  mutate(category = "seedling-specific\nloci") %>% 
-  mutate(sample_type = "ovary (9hap)" ) %>% 
-  mutate(proportion = 0.12) %>% 
-  mutate(text = "NS") %>% 
-  mutate(vjust = -1.5)%>% 
-  mutate(hjust = -0.2)
-
-annotate_sperm_spec1 <- 
-  data.frame(
-    xmin = 1,
-    xmax = 5
-  ) %>% 
-  mutate(category = "sperm-specific\nloci") %>% 
-  mutate(sample_type = "sperm" ) %>% 
-  mutate(proportion = 0.22) %>% 
-  mutate(text = "0") %>% 
-  mutate(vjust = -8)%>% 
-  mutate(hjust = -0.5)
-
-annotate_sperm_spec2 <-  data.frame(
-    xmin = 2,
-    xmax = 3
-  ) %>% 
-  mutate(category = "sperm-specific\nloci") %>% 
-  mutate(sample_type = "ovary (9hap)" ) %>% 
-  mutate(proportion = 0.04) %>% 
-  mutate(text = "NS") %>% 
-  mutate(vjust = -1.5)%>% 
-  mutate(hjust = -0.2)
-
-annotate_sperm_spec3 <-  data.frame(
-    xmin = 4,
-    xmax = 5
-  ) %>% 
-  mutate(category = "sperm-specific\nloci") %>% 
-  mutate(sample_type = "egg" ) %>% 
-  mutate(proportion = 0.04) %>% 
-  mutate(text = "0.019") %>% 
-  mutate(vjust = -1.5)%>% 
-  mutate(hjust = -0.1)
-
-annotate_spec <- rbind(
-  annotate_seedling_spec1,
-  annotate_seedling_spec2,
-  annotate_sperm_spec1,
-  annotate_sperm_spec2,
-  annotate_sperm_spec3
-)
-```
-
- 
-```{r}
-length_data %>% 
-  filter(genotype == "WT") %>% 
+specific_data_sirenF <- length_data %>% 
   filter(length == 24) %>% 
+  filter(str_detect(category, "signa|inter")) %>%
+  filter(str_detect(category, "siren")) %>%
+  filter(str_detect(category, "zygote") == F) %>% 
+  inner_join(lengths_summary_sirenF_sam %>% 
+               identify_samples2() %>%
+               select(-X1), by = "sample_ID") %>% 
+  mutate(pro_24_sirenF = count / `24.y`) %>% 
+  select(sample_ID, sample_type, pro_24_sirenF, category) %>% 
   filter(sample_type == "egg"|
            sample_type == "sperm"|
            sample_type == "seedling shoot"|
            sample_type == "zygote" |
            sample_type == "ovary" |
-           sample_type == "ovary_9hap" ) %>% 
- filter(str_detect(category, "seedling-specific") |
-            str_detect(category, "sperm-specific") 
-           ) %>% 
+           sample_type == "ovary_9hap") %>% 
   mutate(sample_type = case_when(
     str_detect(sample_type, "seedling") ~ "seedling",
     str_detect(sample_type, "ovary_9hap") ~ "ovary (9hap)" ,
     str_detect(sample_type, "ovary") & 
-      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)" ,
-    str_detect(sample_type, "embryo") ~ "embryo",
+      str_detect(sample_type, "9hap") == F ~ "ovary (0hr)",
     T ~ sample_type
-  )) %>% 
+  )) 
+
+head(specific_data_sirenF)
+```
+```{r}
+specific_data_sirenF %>% 
+  #filter(category == "seedling-specific\nloci" |
+   #        category == "sperm-specific\nloci")  %>% 
+  group_by(category, sample_type) %>% 
+  summarise(
+    mean = mean(pro_24_sirenF)
+  ) 
+```
+* egg spec: zygote vs. egg: 0.018 vs. 0.15 
+* seedling specific: zygote vs. egg: 0.14 vs. 0.03
+* sperm specific: zygote vs. sperm: 0.04 vs 0.36
+
+```{r}
+model_spec_24_sirenF_logit <- lm(logit(pro_24_sirenF) ~ category * sample_type, 
+                                 data = specific_data_sirenF)
+                          
+
+anova(model_spec_24_sirenF_logit)
+```
+```{r}
+est_spec_24_sirenF_logit <- emmeans(model_spec_24_sirenF_logit, pairwise ~ sample_type | category)
+spec_results_sirenF_logit <- multcomp::cld(est_spec_24_sirenF_logit$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_remove_all(.group, " ")) %>% 
+  select(sample_type, category, grouping)
+ 
+spec_results_sirenF_logit
+```
+```{r}
+est_spec_24_sirenF_logit$contrasts %>% 
+  as.data.frame() %>% 
+  select(contrast, category, p.value)
+```
+
+* egg spec: egg - zygote: P = 0
+* seedling spec: egg - zygote: P = 0
+* sperm spec: sperm - zygote: P = 0
+
+
+## plot 
+```{r}
+annotate_egg_spec1 <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "egg-signature\nloci") %>% 
+  mutate(sample_type = "egg" ) %>% 
+  mutate(pro_24 = 0.06) %>% 
+  mutate(text = "5e-14") %>% 
+  mutate(vjust = -1.2) %>% 
+  mutate(hjust = -0.1) %>% 
+  mutate(height = 0.6)
+
+
+annotate_seedling_spec1 <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "seedling-signature\nloci") %>% 
+  mutate(sample_type = "egg" ) %>% 
+  mutate(pro_24 = 0.1) %>% 
+  mutate(text = "1e-13") %>% 
+  mutate(vjust = -1.2) %>% 
+  mutate(hjust = -0.1) %>% 
+  mutate(height = 1)
+
+annotate_sperm_spec1 <- data.frame(
+    xmin = 1.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "sperm-signature\nloci") %>% 
+  mutate(sample_type = "sperm" ) %>% 
+  mutate(pro_24 = 0.22) %>% 
+  mutate(text = "4e-14") %>% 
+  mutate(vjust = -8) %>% 
+  mutate(hjust = -0.1) %>% 
+  mutate(height = 1.5)
+
+annotate_spec <- rbind(
+  annotate_egg_spec1, 
+  annotate_seedling_spec1,
+  annotate_sperm_spec1
+)
+ 
+specific_data %>% 
+    filter(str_detect(category, "sig")) %>% 
   mutate(sample_type = factor(sample_type, levels = rev(c(
-      "seedling", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)",  "sperm"
   )))) %>%  
-  ggplot(aes(x = sample_type, y = proportion*100 )) +
-  facet_grid(. ~ category, scales = "free_y") +
+  ggplot(aes(x = sample_type, y = pro_24*100 )) +
+  facet_grid(. ~ category, scales = "free_x") +
   geom_bar(stat = "summary", fun = mean, aes(fill = sample_type), alpha = 0.8, width =0.7) +
   geom_point(aes(fill = sample_type), color = "white", shape = 21, alpha = 0.8, 
              position = position_jitter(0.1, seed = 666), size = 2) +
-  geom_text(data = spec_results_logit,
+  geom_text(data = spec_results_logit %>% 
+              filter(str_detect(category, "sig")),
              aes(label = grouping), size = 4, fontface = "bold", y = 0,
              hjust = 0) +
-  geom_errorbarh(data = annotate_spec, aes(xmin = xmin, xmax = xmax),
-                  size = 1, height = 0.5) +
-  geom_text(data = annotate_spec, aes(label = text, vjust = vjust, hjust = hjust), 
+  geom_errorbarh(data = annotate_spec, aes(xmin = xmin, xmax = xmax, height = height),
+                  size = 1) +
+  geom_text(data = annotate_spec, aes(label = text, vjust = vjust, hjust = hjust),
             size = 4, fontface = "bold") +
   scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "orangered3", "coral4", "dodgerblue2"),
                     limits = c(
@@ -932,7 +1549,95 @@ length_data %>%
   )) +  
   labs(fill = NULL,
        x = "siRNA trancriptome",
-       y = "24-nt siRNA (% of total siRNA)") +
+       y = "24-nt siRNA (% total 24-nt siRNA)") +
+  guides(fill = guide_legend(ncol = 2)) +
+  theme_minimal() +
+  theme(text = element_text(size= 14, face="bold")) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  theme(axis.line = element_line(size = 1.1)) +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()) +
+  theme(legend.position = "none") +
+  theme(strip.placement = "outside") +
+  theme(panel.spacing = unit(0.8, "line")) +
+  coord_flip()
+
+ggsave(filename = "siRNA_24_spec_bar_lite.svg", width = 7, height = 3)
+ggsave(filename = "siRNA_24_spec_bar_lite.png", width = 7, height = 3)
+```
+
+```{r}
+annotate_egg_spec1_sirenF <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "egg-signature loci\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "egg" ) %>% 
+  mutate(pro_24_sirenF = 0.1) %>% 
+  mutate(text = "P = 0") %>% 
+  mutate(vjust = -1.2) %>% 
+  mutate(hjust = -0.1) %>% 
+  mutate(height = 1)
+ 
+
+annotate_seedling_spec1_sirenF <- data.frame(
+    xmin = 4.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "seedling-signature loci\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "egg" ) %>% 
+  mutate(pro_24_sirenF = 0.15) %>% 
+  mutate(text = "P = 0") %>% 
+  mutate(vjust = -1.2) %>% 
+  mutate(hjust = -0.1) %>% 
+  mutate(height = 1)
+
+annotate_sperm_spec1_sirenF <- data.frame(
+    xmin = 1.1,
+    xmax = 4.9
+  ) %>% 
+  mutate(category = "sperm-signature loci\n(siren siRNAs excluded)") %>% 
+  mutate(sample_type = "sperm" ) %>% 
+  mutate(pro_24_sirenF = 0.28) %>% 
+  mutate(text = "P = 0") %>% 
+  mutate(vjust = -8) %>% 
+  mutate(hjust = -0.1) %>% 
+  mutate(height = 1.5)
+
+annotate_spec <- rbind(
+  annotate_egg_spec1_sirenF, 
+  annotate_seedling_spec1_sirenF,
+  annotate_sperm_spec1_sirenF
+)
+ 
+specific_data_sirenF %>% 
+  filter(str_detect(category, "sig")) %>% 
+  filter(str_detect(category, "siren")) %>% 
+  mutate(sample_type = factor(sample_type, levels = rev(c(
+      "seedling", "zygote", "egg","ovary (9hap)", "ovary (0hr)",  "sperm"
+  )))) %>%  
+  ggplot(aes(x = sample_type, y = pro_24_sirenF*100 )) +
+  facet_grid(. ~ category, scales = "free_x") +
+  geom_bar(stat = "summary", fun = mean, aes(fill = sample_type), alpha = 0.8, width =0.7) +
+  geom_point(aes(fill = sample_type), color = "white", shape = 21, alpha = 0.8, 
+             position = position_jitter(0.1, seed = 666), size = 2) +
+  geom_text(data = spec_results_sirenF_logit %>% 
+              filter(str_detect(category, "speci")) %>% 
+  filter(str_detect(category, "siren")),
+             aes(label = grouping), size = 4, fontface = "bold", y = 0,
+             hjust = 0) +
+  geom_errorbarh(data = annotate_spec, aes(xmin = xmin, xmax = xmax, height = height),
+                  size = 1) +
+  geom_text(data = annotate_spec, aes(label = text, vjust = vjust, hjust = hjust),
+            size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("seagreen", "violetred4", "tomato1", "orangered3", "coral4", "dodgerblue2"),
+                    limits = c(
+      "seedling", "zygote", "egg","ovary (0hr)", "ovary (9hap)", "sperm"
+  )) +  
+  labs(fill = NULL,
+       x = "siRNA trancriptome",
+       y = "24-nt siRNA (% non-siren 24-nt siRNA)") +
   guides(fill = guide_legend(ncol = 2)) +
   theme_minimal() +
   theme(text = element_text(size= 14, face="bold")) +
@@ -946,11 +1651,9 @@ length_data %>%
   theme(panel.spacing = unit(1, "line")) +
   coord_flip()
 
-ggsave(filename = "siRNA_24_spec_bar_lite.svg", width = 7, height = 4)
-ggsave(filename = "siRNA_24_spec_bar_lite.png", width = 7, height = 4)
+ggsave(filename = "siRNA_24_spec_bar_lite_sirenF.svg", width = 7.2, height = 3)
+ggsave(filename = "siRNA_24_spec_bar_lite_sirenF.png", width = 7.2, height = 3)
 ```
-
-
 
 
 
