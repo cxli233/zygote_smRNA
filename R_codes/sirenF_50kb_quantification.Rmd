@@ -325,7 +325,8 @@ bin50_data_clean_s_cent %>%
   ggplot(aes(x = sample_type, y = log10(RPM + 1))) +
   #ggplot(aes(x = sample_type, y = RPM)) +
   ggbeeswarm::geom_quasirandom(color = "white", shape = 21, alpha = 0.8,
-                               aes(fill = sample_type)) + 
+                              aes(fill = sample_type)) + 
+  #geom_point(position = position_jitter()) +
   #geom_boxplot(width = 0.3, outlier.shape = NA, fill = NA) +
   geom_text(data = cent_results, aes(label = grouping, y = text.y), size = 3.5, fontface = "bold") +
   annotate(geom = "errorbarh", xmin = 2, xmax = 4, height = 0.05, y = 3) +

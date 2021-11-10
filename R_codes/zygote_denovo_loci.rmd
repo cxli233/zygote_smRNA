@@ -43,6 +43,16 @@ bin50_data <- sapply(bin50_list, read_delim, simplify = FALSE, col_names = F, de
 
 head(bin50_data)
 ```
+```{r message=F}
+bin50_list2 <- list.files("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/short_long_TE_coverage/", 
+                             pattern = "50KB.*.cov", full.names = T)
+
+bin50_data2 <- sapply(bin50_list2, read_delim, simplify = FALSE, col_names = F, delim = "\t") %>% 
+  bind_rows(.id = "id")
+
+head(bin50_data2)
+```
+ 
  
 ```{r message=FALSE}
 gene.density <-  read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/50KB_windows/MSU7_filtered_genes_50Kb.cov", 
@@ -95,6 +105,7 @@ total_drm2_chh
 ## keying data
 ```{r}
 beds_total <- bin50_data %>% 
+  rbind(bin50_data2) %>% 
   group_by(id) %>% 
   summarise(NN = sum(X9)) %>%  
   mutate(locus = case_when(
@@ -106,7 +117,10 @@ beds_total <- bin50_data %>%
     str_detect(id, "sperm_loci") &
       str_detect(id, "endo") == F ~ "sperm siRNA loci", #6
     str_detect(id, "zygote_loci.bed") ~ "zygote siRNA loci", #7
-     str_detect(id, "zygote-egg_comp") ~ "Z loci - E loci" #8
+     str_detect(id, "zygote-egg_comp") ~ "Z loci - E loci", #8
+    str_detect(id, "CACTA_DNA") ~ "CACTA", #9
+    str_detect(id, "50-250") ~ "short TEs", #10
+    str_detect(id, "251") ~ "long TEs" #11 
   )) %>% 
   filter(is.na(locus) == F) %>% 
   ungroup() %>% 
@@ -122,6 +136,7 @@ beds_total
  
 ```{r}
 bin50_data_select <- bin50_data %>% 
+  rbind(bin50_data2) %>% 
   rbind(gene.density %>% 
           mutate(id = "genes")) %>%  #1
   rbind(gypsy %>% 
@@ -149,7 +164,10 @@ bin50_data_select <- bin50_data %>%
     str_detect(id, "genes") ~ "genes", #9
     str_detect(id, "TIR") ~ "TIR", #10
     str_detect(id, "Gypsy") ~ "Gypsy", #11
-    str_detect(id, "embryo DMR2 target loci") ~ "embryo DRM2 target loci" #12
+    str_detect(id, "embryo DMR2 target loci") ~ "embryo DRM2 target loci", #12
+    str_detect(id, "CACTA_DNA") ~ "CACTA", #13
+    str_detect(id, "50-250") ~ "short TEs", #14
+    str_detect(id, "251") ~ "long TEs" #15 
   )) %>% 
   filter(is.na(locus) == F) 
 
@@ -170,7 +188,8 @@ bin50_data_select_wide <-
   inner_join(beds_total, by = "locus") %>% 
   mutate(RPM = count/NN * 10^6) %>% 
   select(Chr, start, end, locus, RPM) %>% 
-  spread(locus, RPM)
+  spread(locus, RPM) %>% 
+  select(-CACTA, -`Z/E loci intersect`)
 
 head(bin50_data_select_wide)
 ```
@@ -200,17 +219,17 @@ pc$x %>%
   filter(locus_type != "zygote/egg loci intersect") %>% 
   ggplot(aes(x = PC1, y = PC2)) +
   geom_point(aes(fill = locus_type, color = type2), size = 3, alpha = 0.8, shape = 21) +
-  #geom_text_repel(aes(label = locus_type), size = 3) +
-  scale_fill_manual(values = c("white", "orange2","blue2", "seagreen", "grey20",
+  scale_fill_manual(values = c("white","gold", "orange2","blue2", "seagreen", "grey20",
                                 "pink3", "violetred4", "tomato1",
-                               "coral4", "dodgerblue2", "grey80"),
-                    limits = c("genes", "TIR", "embryo DRM2 target loci", "seedling siRNA loci",
+                               "coral4", "dodgerblue2", "slateblue4", "grey80"),
+                    limits = c("genes", "short TEs", "TIR", "embryo DRM2 target loci", 
+                               "seedling siRNA loci",
                                "*embryo siRNA loci",
                                "Z loci - E loci", 
                                "zygote siRNA loci",
                                "egg siRNA loci",
                                "E loci - Z loci",
-                               "sperm siRNA loci", "Gypsy")) +
+                               "sperm siRNA loci", "long TEs", "Gypsy")) +
   scale_color_manual(values = c("black", "white"),
                      limits = c("Gs", "else")) +
   labs(x = paste("PC1 (", pc_importance[1, 2] %>% signif(3)*100, "% of Variance)", sep = ""), 
@@ -287,28 +306,30 @@ gene_dist_PC
 cor.test(gene_dist_PC$median, gene_dist_PC$PC1, method = "s")
 cor.test(gene_dist_PC$median, gene_dist_PC$PC1, method = "s")$p.value
 cor.test(gene_dist_PC$medianL, gene_dist_PC$PC2, method = "s")
+cor.test(gene_dist_PC$medianL, gene_dist_PC$PC2, method = "s")$p.value
 ```
 ```{r}
 legend.source <- get_legend(
   gene_dist_PC %>% 
   ggplot(aes(x = PC1, y = median/1000)) +
   geom_point(aes(fill = ID), shape = 21, alpha = 0.8, size = 3, color = "black") +
-  scale_fill_manual(values = c("white", "orange2","blue2", "seagreen", "grey20",
+  scale_fill_manual(values = c("white", "gold","orange2","blue2", "seagreen", "grey20",
                                 "pink3", "violetred4", "tomato1",
-                               "coral4", "dodgerblue2", "grey80"),
-                    limits = c("genes", "TIR", "embryo DRM2 targets", "seedling siRNA loci",
+                               "coral4", "dodgerblue2", "slateblue4", "grey80"),
+                    limits = c("genes","short TEs", "TIR", "embryo DRM2 targets",
+                               "seedling siRNA loci",
                                "*embryo siRNA loci",
                                "Z loci - E loci", 
                                "zygote siRNA loci",
                                "egg siRNA loci",
                                "E loci - Z loci",
-                               "sperm siRNA loci", "Gypsy")) +
+                               "sperm siRNA loci", "long TEs","Gypsy")) +
   labs(x = "PC1", 
        y = "median distance to\nnearest genes (kb)",
        fill = NULL,
        color = NULL) +  
   guides(color = F,
-         fill = guide_legend(ncol = 3)) +
+         fill = guide_legend(nrow = 4)) +
   theme_minimal() +
   theme(axis.line = element_line(size = 1)) +
   theme(legend.position = "top") +
@@ -327,19 +348,20 @@ dist_PC1 <- gene_dist_PC %>%
   )) %>% 
   ggplot(aes(x = PC1, y = median/1000)) +
   geom_point(aes(fill = ID, color = type2), shape = 21, alpha = 0.8, size = 3) +
-  annotate(geom = "text", label = "rho = -0.98\nP = 0",
+  annotate(geom = "text", label = "rho = -0.97\nP = 0",
            size = 3.5, x = Inf, y = Inf, hjust = 1.1, vjust = 1.2,
            fontface = "bold") + 
-  scale_fill_manual(values = c("white", "orange2","blue2", "seagreen", "grey20",
+  scale_fill_manual(values = c("white", "gold","orange2","blue2", "seagreen", "grey20",
                                 "pink3", "violetred4", "tomato1",
-                               "coral4", "dodgerblue2", "grey80"),
-                    limits = c("genes", "TIR", "embryo DRM2 targets", "seedling siRNA loci",
+                               "coral4", "dodgerblue2", "slateblue4", "grey80"),
+                    limits = c("genes","short TEs", "TIR", "embryo DRM2 targets",
+                               "seedling siRNA loci",
                                "*embryo siRNA loci",
                                "Z loci - E loci", 
                                "zygote siRNA loci",
                                "egg siRNA loci",
                                "E loci - Z loci",
-                               "sperm siRNA loci", "Gypsy")) +
+                               "sperm siRNA loci", "long TEs","Gypsy")) +
   scale_color_manual(values = c("black", "white"),
                      limits = c("Gs", "else")) +
   labs(x = "PC1", 
@@ -362,19 +384,20 @@ length_PC2 <- gene_dist_PC %>%
   )) %>% 
   ggplot(aes(x = PC2, y = medianL)) +
   geom_point(aes(fill = ID, color = type2), shape = 21, alpha = 0.8, size = 3) +
-  annotate(geom = "text", label = "rho = 0.88\nP = 0.0007",
+  annotate(geom = "text", label = "rho = 0.91\nP = 0",
            size = 3.5, x = -Inf, y = Inf, hjust = -0.1, vjust = 1.2,
            fontface = "bold") + 
-  scale_fill_manual(values = c("white", "orange2","blue2", "seagreen", "grey20",
+  scale_fill_manual(values = c("white", "gold","orange2","blue2", "seagreen", "grey20",
                                 "pink3", "violetred4", "tomato1",
-                               "coral4", "dodgerblue2", "grey80"),
-                    limits = c("genes", "TIR", "embryo DRM2 targets", "seedling siRNA loci",
+                               "coral4", "dodgerblue2", "slateblue4", "grey80"),
+                    limits = c("genes","short TEs", "TIR", "embryo DRM2 targets",
+                               "seedling siRNA loci",
                                "*embryo siRNA loci",
                                "Z loci - E loci", 
                                "zygote siRNA loci",
                                "egg siRNA loci",
                                "E loci - Z loci",
-                               "sperm siRNA loci", "Gypsy")) +
+                               "sperm siRNA loci", "long TEs","Gypsy")) +
   scale_color_manual(values = c("black", "white"),
                      limits = c("Gs", "else")) +
   labs(x = "PC2", 
@@ -403,7 +426,9 @@ ggsave("PC1_PC2_dist_length.png", height = 6, width = 9)
 ```{r}
 cor_data <- overlap_data_zygote_TE_s %>% 
   filter(TE == "Gypsy" |
-           TE == "TIR") %>% 
+           TE == "TIR" |
+           TE == "short TEs" |
+           TE == "long TEs") %>% 
   select(ID, mean, TE) %>% 
   spread(TE, mean) %>% 
   inner_join(
@@ -438,13 +463,17 @@ cor_data
 cor.test(cor_data$TIR, cor_data$PC1, method = "s")
 cor.test(cor_data$Gypsy, cor_data$PC1, method = "s")
 
+cor.test(cor_data$`long TEs`, cor_data$PC1, method = "s")
+cor.test(cor_data$`short TEs`, cor_data$PC1, method = "s")
+
 cor.test(cor_data$mCHH, cor_data$PC1, method = "s")
 cor.test(cor_data$mCHG, cor_data$PC1, method = "s")
 cor.test(cor_data$mCG, cor_data$PC1, method = "s")
 ```
 
 ```{r}
-cor_matrix_data <- cor(cor_data[, -c(1, 8)], method = "s") %>% 
+cor_matrix_data <- cor(cor_data %>% 
+                         select(-ID, -PC1), method = "s") %>% 
   as.data.frame() %>% 
   mutate(var1 = row.names(.)) %>% 
   gather("var2", "rho", 1:6) 
@@ -477,13 +506,12 @@ cor_heatmap <- cor_matrix_data %>%
         axis.text = element_text(colour = "black"),
         axis.text.y = element_text(hjust = 0.5),
         axis.text.x = element_text(angle = 45, hjust = 1),
-        panel.grid = element_blank()) +
-  coord_fixed()
+        panel.grid = element_blank())  
 
 cor_heatmap 
 
-ggsave("cor_heatmap.svg", height = 3.8, width = 4.2)
-ggsave("cor_heatmap.png", height = 3.8, width = 4.2)
+ggsave("cor_heatmap.svg", height = 3.8, width = 4.5)
+ggsave("cor_heatmap.png", height = 3.8, width = 4.5)
 ```
 
 ```{r}
@@ -525,7 +553,7 @@ cor_matrix_data %>%
 TIR_PC1 <- cor_data %>% 
   ggplot(aes(x = PC1, y = TIR)) +
   geom_point(aes(fill = ID), shape = 21, alpha = 0.8, size = 3, color = "white") +
-  annotate(geom = "text", label = "rho = -0.96\nP = 0.003",
+  annotate(geom = "text", label = "rho = 1\nP = 0.0004",
            size = 3.5, x = -Inf, y = Inf, hjust = -0.1, vjust = 1.2,
            fontface = "bold") + 
   scale_fill_manual(values = c( "seagreen", "grey20",
@@ -553,7 +581,7 @@ TIR_PC1 <- cor_data %>%
 Gypsy_PC1 <- cor_data %>% 
   ggplot(aes(x = PC1, y = Gypsy)) +
   geom_point(aes(fill = ID), shape = 21, alpha = 0.8, size = 3, color = "white") +
-  annotate(geom = "text", label = "rho = -0.89\nP = 0.0123",
+  annotate(geom = "text", label = "rho = -0.96\nP = 0.003",
            size = 3.5, x = Inf, y = Inf, hjust = 1.1, vjust = 1.2,
            fontface = "bold") + 
   scale_fill_manual(values = c( "seagreen", "grey20",
@@ -581,7 +609,7 @@ Gypsy_PC1 <- cor_data %>%
 mCHH_PC1 <- cor_data %>% 
   ggplot(aes(x = PC1, y = mCHH)) +
   geom_point(aes(fill = ID), shape = 21, alpha = 0.8, size = 3, color = "white") +
-  annotate(geom = "text", label = "rho = 1\nP = 4e-4",
+  annotate(geom = "text", label = "rho = 0.96\nP = 0;003",
            size = 3.5, x = -Inf, y = Inf, hjust = -0.1, vjust = 1.2,
            fontface = "bold") + 
   scale_fill_manual(values = c( "seagreen", "grey20",
@@ -610,7 +638,7 @@ mCHH_PC1 <- cor_data %>%
 mCHG_PC1 <- cor_data %>% 
   ggplot(aes(x = PC1, y = mCHG)) +
   geom_point(aes(fill = ID), shape = 21, alpha = 0.8, size = 3, color = "white") +
-  annotate(geom = "text", label = "rho = -0.79\nP = 0.048",
+  annotate(geom = "text", label = "rho = -0.89\nP = 0.012",
            size = 3.5, x = Inf, y = Inf, hjust = 1.1, vjust = 1.2,
            fontface = "bold") + 
   scale_fill_manual(values = c( "seagreen", "grey20",
@@ -638,7 +666,7 @@ mCHG_PC1 <- cor_data %>%
 mCG_PC1 <- cor_data %>% 
   ggplot(aes(x = PC1, y = mCG)) +
   geom_point(aes(fill = ID), shape = 21, alpha = 0.8, size = 3, color = "white") +
-  annotate(geom = "text", label = "rho = -0.95\nP = 8e-4",
+  annotate(geom = "text", label = "rho = -0.99\nP = 1e-5",
            size = 3.5, x = Inf, y = Inf, hjust = 1.1, vjust = 1.2,
            fontface = "bold") + 
   scale_fill_manual(values = c( "seagreen", "grey20",
@@ -738,12 +766,12 @@ bin50_data_select_s
 ```
 ```{r}
 bin50_data_select_cent2 <- bin50_data_select %>% 
-  cbind(centro_bed) %>% 
+  merge(centro_bed) %>% 
   filter(Chr == Chr.c) %>% 
   filter( 
     start > start.c & end < end.c 
   ) %>% 
-  mutate(tag = paste(Chr, start, end, "-")) 
+  mutate(tag = paste(Chr, start, end, sep = "-")) 
 
 head(bin50_data_select_cent2)
 bin50_data_select_cent2 %>% 
@@ -753,7 +781,7 @@ bin50_data_select_cent2 %>%
 
 ```{r}
 bin50_data_select_cent <- bin50_data_select %>% 
-  mutate(tag = paste(Chr, start, end, "-")) %>% 
+  mutate(tag = paste(Chr, start, end, sep = "-")) %>% 
   mutate(cent = case_when(
     tag %in% bin50_data_select_cent2$tag ~ "C",
     tag %in% bin50_data_select_cent2$tag == F ~ "NC"
@@ -766,41 +794,50 @@ head(bin50_data_select_cent)
  
 ```{r}
 bin50_data_select_cent %>% 
+  group_by(locus) %>% 
+  filter(RPM <= quantile(RPM, 0.99)) %>% 
+  ungroup() %>% 
   #filter(cent == "C") %>% 
   filter(start > 5749556 & end < 8141816) %>% 
   filter(str_detect(locus, "intersect") == F) %>% 
+  filter(locus != "CACTA") %>% 
   mutate(locus = case_when(
     locus == "embryo siRNA loci" ~ "*embryo siRNA loci",
     locus == "embryo DRM2 target loci" ~ "embryo DRM2 targets",
     T ~ locus
   )) %>% 
+  mutate(locus = factor(locus, levels = c(
+    "genes", "short TEs", "TIR", "long TEs", "Gypsy",
+    "sperm siRNA loci", "seedling siRNA loci", "*embryo siRNA loci",
+    "embryo DNA2 targets", "Z loci - E loci", "E loci - Z loci"
+  ))) %>% 
+  filter(is.na(locus) == F) %>% 
   filter(Chr == 8) %>% 
   ggplot(aes(x = start, y = RPM)) +
   facet_grid(locus ~ Chr, scales = "free", space = "free_x", switch = "y") +
   geom_rect(aes(xmin = start, xmax = end, ymax = RPM, fill = locus), ymin = 0) +
-  geom_hline(data = bin50_data_select_s %>% 
-  filter(str_detect(locus, "intersect") == F) %>%
-               mutate(locus = case_when(
-    locus == "embryo siRNA loci" ~ "*embryo siRNA loci",
-    locus == "embryo DRM2 target loci" ~ "embryo DRM2 targets",
-    T ~ locus
-  )),
-       aes(yintercept = mean.RPM)) +
-  scale_fill_manual(values = c("black", "orange2","blue2", "seagreen", "grey20",
+  scale_fill_manual(values = c("black", "gold","orange2","blue2", "seagreen", "grey20",
                                 "pink3", "violetred4", "tomato1",
-                               "coral4", "dodgerblue2", "grey80"),
-                    limits = c("genes", "TIR", "embryo DRM2 targets", "seedling siRNA loci",
+                               "coral4", "dodgerblue2", "slateblue4","grey80"),
+                    limits = c("genes", "short TEs", "TIR", "embryo DRM2 targets",
+                               "seedling siRNA loci",
                                "*embryo siRNA loci",
                                "Z loci - E loci", 
                                "zygote siRNA loci",
                                "egg siRNA loci",
                                "E loci - Z loci",
-                               "sperm siRNA loci", "Gypsy")) +
+                               "sperm siRNA loci", "long TEs", "Gypsy")) +
+  labs(x = NULL,
+       y = NULL) +
   theme_minimal() +
   theme(legend.position = "none",
+        text = element_text(size = 14, color = "black", face = "bold"), 
         axis.text.y = element_blank(),
         strip.placement = "outside",
-        strip.text.y.left = element_text(hjust = 0.5, angle = 0))
+        strip.text.y.left = element_text(hjust = 0.5, angle = 0),
+        strip.text.x = element_blank(),
+        axis.text.x = element_blank(),
+        panel.grid = element_blank())
 ```
 ## stat
 ```{r}
@@ -829,7 +866,7 @@ logistic <- function(x){
 model_cent <- lm(log(RPM+1) ~ locus, 
                  data = bin50_data_select_cent %>% 
                    filter(cent == "C") %>% 
-  filter(str_detect(locus, "intersect") == F) %>% 
+  filter(str_detect(locus, "intersect|TIR|Gypsy|CACTA") == F) %>% 
   mutate(locus = case_when(
     locus == "embryo siRNA loci" ~ "*embryo siRNA loci",
     locus == "embryo DRM2 target loci" ~ "embryo DRM2 targets",
@@ -847,8 +884,8 @@ est_cent$contrasts %>%
 
 ```
 
-* E-Z vs. Z-E = 4e-13
-* egg - zygote = 4e-10 
+* E-Z vs. Z-E = 3e-13
+* egg - zygote = 5e-13 
 
 ```{r}
 cent_results <- multcomp::cld(est_cent$emmeans, Letters = letters) %>% 
@@ -863,7 +900,7 @@ cent_results
 ```{r}
 bin50_data_select_cent %>% 
   filter(cent == "C") %>% 
-  filter(str_detect(locus, "intersect") == F) %>% 
+  filter(str_detect(locus, "intersect|CACTA|TIR|Gypsy") == F) %>% 
   mutate(locus = case_when(
     locus == "embryo siRNA loci" ~ "*embryo siRNA loci",
     locus == "embryo DRM2 target loci" ~ "embryo DRM2 targets",
@@ -876,34 +913,26 @@ bin50_data_select_cent %>%
   )) %>% 
   mutate(locus = fct_reorder(.f = locus, .x = RPM, .fun = median)) %>% 
   ggplot(aes(y = RPM, x = locus)) +
-  #facet_wrap(~ Chr, ncol = 4) +
   ggbeeswarm::geom_quasirandom(alpha = 0.8, aes(fill = locus,
                                                 color = type2), shape = 21, size = 1) + 
-  # geom_crossbar(data = bin50_data_select_cent_s %>% 
-  #              mutate(locus = case_when(
-  #   locus == "embryo siRNA loci" ~ "*embryo siRNA loci",
-  #   locus == "embryo DRM2 target loci" ~ "embryo DRM2 targets",
-  #   T ~ locus
-  # )), color = "red3", alpha = 0.8,
-  #            aes(y = median, ymax = median, ymin = median), width = 0.5) +
   geom_text(data = cent_results, aes(label = grouping), y = 1000,
             size = 3.5, fontface = "bold") +
   annotate(geom = "errorbarh", height = 50, xmin = 5, xmax = 8, y = 450) +
   annotate(geom = "errorbarh", height = 50, xmin = 7, xmax = 9, y = 550) + 
-  annotate(geom = "text", label = "4e-10", y = 450, hjust = -0.1, x = 6, 
+  annotate(geom = "text", label = "5e-13", y = 450, hjust = -0.1, x = 6, 
            size = 3.5, fontface = "bold") +
-  annotate(geom = "text", label = "4e-13", y = 550, hjust = -0.1, x = 8, size = 3.5,
+  annotate(geom = "text", label = "3e-13", y = 550, hjust = -0.1, x = 8, size = 3.5,
            fontface = "bold") +
-  scale_fill_manual(values = c("white", "orange2","blue2", "seagreen", "grey20",
+  scale_fill_manual(values = c("white", "gold","blue2", "seagreen", "grey20",
                                 "pink3", "violetred4", "tomato1",
-                               "coral4", "dodgerblue2", "grey80"),
-                    limits = c("genes", "TIR", "embryo DRM2 targets", "seedling siRNA loci",
+                               "coral4", "dodgerblue2", "slateblue4"),
+                    limits = c("genes", "short TEs", "embryo DRM2 targets", "seedling siRNA loci",
                                "*embryo siRNA loci",
                                "Z loci - E loci", 
                                "zygote siRNA loci",
                                "egg siRNA loci",
                                "E loci - Z loci",
-                               "sperm siRNA loci", "Gypsy")) +
+                               "sperm siRNA loci", "long TEs")) +
   scale_color_manual(values = c("white", "black"),
                      limits = c("else", "Gs")) + 
   labs(x = NULL,
@@ -1131,8 +1160,6 @@ ggsave("zygote_vs_egg_at_DRM2_target.png", height = 5, width = 4.5)
 bin50_data_siren_total <- bin50_data %>% 
   rbind(gene.density %>% 
           mutate(id = "genes")) %>% 
-  rbind(gypsy %>% 
-          mutate(id = "Gypsy")) %>% 
   mutate(locus = case_when(
     str_detect(id, "genes") ~ "genes",
     str_detect(id, "Gypsy") ~ "Gypsy", 
@@ -1154,8 +1181,6 @@ bin50_data_siren_total
 bin50_data_siren <- bin50_data %>% 
   rbind(gene.density %>% 
           mutate(id = "genes")) %>% 
-  rbind(gypsy %>% 
-          mutate(id = "Gypsy")) %>% 
   rename(Chr = X1,
          start = X4,
          end = X5,
@@ -1190,7 +1215,7 @@ bin50_data_siren_wide <- bin50_data_siren %>%
 head(bin50_data_siren_wide)
 ```
 ```{r}
-pc2 <- prcomp(t(bin50_data_siren_wide[, 4:10]))
+pc2 <- prcomp(t(bin50_data_siren_wide[, 4:9]))
 pc2_importance <- as.data.frame(t(summary(pc2)$importance))
 pc2_importance 
 ```
@@ -1219,7 +1244,7 @@ pc2$x %>%
   theme_bw() + 
   theme(legend.position = "none") +
   theme(text = element_text(size= 14, face="bold")) +
-  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.x=element_text(colour = "black", hjust = 0.8)) +
   theme(axis.text.y=element_text(colour = "black")) 
 
 ggsave("50k_bin_loci_PCA_siren.svg", width = 5, height = 5)

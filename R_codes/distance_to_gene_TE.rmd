@@ -64,7 +64,109 @@ Gypsy_dist <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRN
 
 head(Gypsy_dist) #X1, X4, X5, X19 
 ```
+```{r message=F}
+CACTA_DNA_TE_closest_gene <- read_excel("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/short_long_TE_gene_distance/CACTA_DNA_TE_closest_gene.xlsx", 
+    col_names = FALSE)
 
+shortTE_dist <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/short_long_TE_gene_distance/Oryza_sativa.IRGSP-1.transposons.50-250.out.gff.closest_gene.txt", col_names = F, delim = "\t")
+
+longTE_dist <- read_delim("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/short_long_TE_gene_distance/Oryza_sativa.IRGSP-1.transposons.251.out.gff.closest_gene.txt", col_names = F, delim = "\t")
+```
+
+```{r}
+colnames(CACTA_DNA_TE_closest_gene) <- colnames(shortTE_dist)
+
+shortTE_dist %>% 
+  select(1,4,5) %>% 
+  write_delim("shortTE.bed", col_names = F, delim = "\t")
+
+longTE_dist %>% 
+  select(1,4,5) %>% 
+  write_delim("longTE.bed", col_names = F, delim = "\t")
+```
+
+## composition and lengths of TE classifications 
+### composition
+ 
+
+### lengths 
+```{r}
+TE_dist <- rbind(
+  TIR_dist %>% 
+    mutate(class = "TIR"),
+  Gypsy_dist %>% 
+    mutate(class = "Gypsy"),
+  shortTE_dist %>% 
+    mutate(class = "short TEs"),
+  longTE_dist %>% 
+    mutate(class = "long TEs")
+) %>% 
+  mutate(length = X5 - X4)  
+
+head(TE_dist)
+```
+
+```{r}
+TE_dist %>%
+  rbind(CACTA_DNA_TE_closest_gene %>% 
+          mutate(class = "CACTA") %>% 
+          mutate(length = X5 - X4)) %>% 
+  group_by(class) %>% 
+  summarise(
+    NN = n()
+  )
+
+summary(shortTE_dist$X5 - shortTE_dist$X4)
+summary(longTE_dist$X5 - longTE_dist$X4)
+summary(CACTA_DNA_TE_closest_gene$X5 - CACTA_DNA_TE_closest_gene$X4)
+```
+
+
+```{r}
+TE_dist %>% 
+  mutate(class = factor(class, levels = c("TIR", "Gypsy", "short TEs", "long TEs"))) %>% 
+  ggplot(aes(x = class, y = log10(length))) +
+  geom_boxplot(aes(fill = class), alpha = 0.8, width= 0.5) +
+  scale_fill_manual(values = c("orange2", "gold", "slateblue4", "grey80"),
+                    limits = c("TIR", "short TEs", "long TEs", "Gypsy")) +
+  labs(y = "log10(bp)",
+       x = "TE superfamility") + 
+  theme_classic() +
+  theme(legend.position = "none",
+        text = element_text(size = 14, color = "black", face = "bold"),
+        axis.text = element_text(color = "black"),
+        axis.text.y.left = element_text(hjust = 0.5)
+        ) +
+  coord_flip()
+
+ggsave("TE_length.svg", height = 2.5, width = 5)
+ggsave("TE_length.png", height = 2.5, width = 5)
+```
+
+```{r}
+TE_dist %>% 
+  rbind(CACTA_DNA_TE_closest_gene %>% 
+          mutate(class = "CACTA") %>% 
+          mutate(length = X5 - X4)) %>% 
+  mutate(class = factor(class, levels = 
+                          c("CACTA", "TIR", "Gypsy", "short TEs", "long TEs"))) %>% 
+  ggplot(aes(x = class, y = log10(length))) +
+  geom_boxplot(aes(fill = class), alpha = 0.8, width= 0.5) +
+  scale_fill_manual(values = c("indianred3", "orange2", "gold", "slateblue4", "grey80"),
+                    limits = c("CACTA", "TIR", "short TEs", "long TEs", "Gypsy")) +
+  labs(y = "log10(bp)",
+       x = "TE superfamility") + 
+  theme_classic() +
+  theme(legend.position = "none",
+        text = element_text(size = 14, color = "black", face = "bold"),
+        axis.text = element_text(color = "black"),
+        axis.text.y.left = element_text(hjust = 0.5)
+        ) +
+  coord_flip()
+
+ggsave("TE_length_CACTA.svg", height = 2.8, width = 5)
+ggsave("TE_length_CACTA.png", height = 2.8, width = 5)
+```
 
 ## egg, sperm, zygote, zygote de novo, seedling, embryo 
 ```{r}
@@ -94,26 +196,25 @@ gene_distance_zygote2 <- gene_distance_zygote %>%
       mutate(ID = "embryo DRM2 targets")
   ) %>% 
   rbind(
-    TIR_dist %>% 
-      select(X1, X4, X5, X19) %>% 
+    TE_dist %>% 
+      mutate(ID = class) %>% 
+      select(X1, X4, X5, X19, ID) %>% 
       rename(X2 = X4, 
              X3 = X5,
-             X13 = X19) %>% 
-      mutate(ID = "TIR")
+             X13 = X19)  
   ) %>% 
   rbind(
-    Gypsy_dist %>% 
-      select(X1, X4, X5, X19) %>% 
+    CACTA_DNA_TE_closest_gene %>% 
+      mutate(ID = "CACTA") %>% 
+      select(X1, X4, X5, X19, ID) %>% 
       rename(X2 = X4, 
              X3 = X5,
-             X13 = X19) %>% 
-      mutate(ID = "Gypsy")
-    )
+             X13 = X19) 
+  )
 
 head(gene_distance_zygote2)
 ```
 
- 
 ### summary stats
 
 ```{r}
@@ -121,7 +222,8 @@ head(gene_distance_zygote2)
 Gypsy_dist %>% 
   mutate(Length = X14- X13) %>% 
   summarise(
-    medianL = median(Length)
+    medianL = median(Length),
+    meanL = mean(Length)
   )
 ```
 
@@ -171,6 +273,7 @@ model_zygote_dist <- glm(distance ~ ID, gene_distance_zygote2 %>%
                           mutate(distance = ceiling(distance)) %>% 
                           filter(str_detect(ID, "ovary") == F) %>% 
                           filter(str_detect(ID, "inter")==F) %>% 
+                          filter(str_detect(ID, "long|short|CACTA") == F) %>% 
                           group_by(ID) %>% 
                           sample_n(2000) %>% 
                           ungroup(),
@@ -203,6 +306,149 @@ est_gene_dist_zy$contrasts %>% as.data.frame() %>%
 
 
 ### plot 
+```{r}
+gene_distance_zy_s %>% 
+  #inner_join(gene_dist_zy_results, by = "ID") %>% 
+  filter(ID == "TIR" |
+           ID == "Gypsy" |
+           ID == "CACTA") %>% 
+  mutate(ID = reorder(ID, median)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ UL,
+    T ~ Q3
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000, fill = ID), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("n = ", NN, ", median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = -0.1, size = 4, fontface = "bold") + 
+  # geom_text(aes(label = grouping, y = Q3/1000), size = 4, hjust = -0.2, vjust = -0.2,
+  #           fontface = "bold") +
+  # annotate(geom = "text", x = 1.5, y= 35, 
+  #          label = "NS", size = 4, fontface = "bold", hjust = -0.2) +
+  # annotate(geom = "errorbarh", xmin = 1.3, xmax = 1.7, y = 35, 
+  #          height = 0.3, size = 1) +
+  scale_fill_manual(values = c("orange2", "grey80", "indianred3"),
+                    limits = c("TIR", "Gypsy", "CACTA"),
+  ) +
+  #scale_y_continuous(breaks = c(0, 20, 40), limits = c(0, 40)) +
+  labs(x = NULL,
+       y = "kilobases to nearest genes",
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 14, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+ggsave("CACTA_TIR_Gypsy_gene_dist.svg", height = 2, width = 5)
+ggsave("CACTA_TIR_Gypsy_gene_dist.png", height = 2, width = 5)
+```
+
+#### 0
+```{r}
+gene_distance_zy_s %>% 
+  #inner_join(gene_dist_zy_results, by = "ID") %>% 
+  filter(ID == "TIR" |
+           ID == "Gypsy") %>% 
+  mutate(ID = reorder(ID, median)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ UL,
+    T ~ Q3
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000, fill = ID), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("n = ", NN, ", median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = -0.1, size = 4, fontface = "bold") + 
+  # geom_text(aes(label = grouping, y = Q3/1000), size = 4, hjust = -0.2, vjust = -0.2,
+  #           fontface = "bold") +
+  # annotate(geom = "text", x = 1.5, y= 35, 
+  #          label = "NS", size = 4, fontface = "bold", hjust = -0.2) +
+  # annotate(geom = "errorbarh", xmin = 1.3, xmax = 1.7, y = 35, 
+  #          height = 0.3, size = 1) +
+  scale_fill_manual(values = c("orange2", "grey80"),
+                    limits = c("TIR", "Gypsy"),
+  ) +
+  #scale_y_continuous(breaks = c(0, 20, 40), limits = c(0, 40)) +
+  labs(x = NULL,
+       y = "kilobases to nearest genes",
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 14, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+ggsave("TIR_Gypsy_gene_dist.svg", height = 1.5, width = 5)
+ggsave("TIR_Gypsy_gene_dist.png", height = 1.5, width = 5)
+```
+```{r}
+gene_distance_zy_s %>% 
+  #inner_join(gene_dist_zy_results, by = "ID") %>% 
+  filter(ID == "short TEs" |
+           ID == "long TEs") %>% 
+  mutate(ID = reorder(ID, median)) %>% 
+  mutate(text.pos = case_when(
+    UL < 20000 ~ Q3,
+    T ~ Q3
+  )) %>% 
+  ggplot(aes(x = ID)) +
+  geom_crossbar(aes(ymin = Q1/1000, ymax = Q3/1000, y = median/1000, fill = ID), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q3/1000, yend = UL/1000)) +
+  geom_segment(aes(x = ID, xend = ID,  y = Q1/1000, yend = LL/1000)) +
+  geom_errorbar(aes(ymin = UL/1000, ymax = UL/1000), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL/1000, ymax = LL/1000), width = 0.3, size = 1) + 
+  geom_text(aes(label = paste("n = ", NN, ", median = ", signif(median/1000, 2), "-kb", sep = ""), 
+                x = ID, y = text.pos/1000),
+                vjust = -0.2,  hjust = -0.01, size = 4, fontface = "bold") + 
+  # geom_text(aes(label = grouping, y = Q3/1000), size = 4, hjust = -0.2, vjust = -0.2,
+  #           fontface = "bold") +
+  # annotate(geom = "text", x = 1.5, y= 35, 
+  #          label = "NS", size = 4, fontface = "bold", hjust = -0.2) +
+  # annotate(geom = "errorbarh", xmin = 1.3, xmax = 1.7, y = 35, 
+  #          height = 0.3, size = 1) +
+  scale_fill_manual(values = c("gold", "slateblue4"),
+                    limits = c("short TEs", "long TEs"),
+  ) +
+  #scale_y_continuous(breaks = c(0, 20, 40), limits = c(0, 40)) +
+  labs(x = NULL,
+       y = "kilobases to nearest genes",
+       fill = NULL,
+       color = NULL) +  
+  guides(fill = guide_legend(nrow = 4)) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  theme(strip.text = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(text = element_text(size = 14, face="bold", colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black")) + 
+  theme(axis.text.y = element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+ggsave("shortlong_gene_dist.svg", height = 1.5, width = 5)
+ggsave("shortlong_gene_dist.png", height = 1.5, width = 5)
+```
+
+
 #### 1
 ```{r}
 group1 <- gene_distance_zy_s %>% 
@@ -424,10 +670,10 @@ group6 <- gene_distance_zy_s %>%
   #          label = "NS", size = 4, fontface = "bold", hjust = -0.2) +
   # annotate(geom = "errorbarh", xmin = 1.2, xmax = 1.8, y = 32, 
   #          height = 0.3, size = 1) + 
-  scale_fill_manual(values = c( "orange", "blue2", "Grey80"),
+  scale_fill_manual(values = c("orange2", "blue2", "grey80"),
                     limits = c("TIR", "embryo DRM2 targets", "Gypsy"),
   ) +
-  scale_x_discrete(label = c("TIR", "embryo DRM2 targets", "Gypsy")) +
+  #scale_x_discrete(label = c("short TE", "embryo DRM2 targets", "long TE")) +
   labs(x = NULL,
        y = "kilobases to nearest genes",
        fill = NULL,
@@ -448,7 +694,7 @@ group6
 #### put them together 
 ```{r}
 plot_grid(group2, group3, group5, group6, 
-          rel_heights = c(1, 1, 1.3 ,1.43),
+          rel_heights = c(1, 1, 1.3 ,1.5),
           ncol = 1,
           axis = "lr",
           align = "v")
@@ -460,17 +706,27 @@ ggsave("distance_near_gene_zygote.png", width = 7, height = 5)
 
 # TE overlaps 
 ## load data
-```{r, warning= F, message = F} 
-overlap_files <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/FullSetLoci3_cov/", 
+```{r, warning=F, message=F}
+overlap_files_seedling <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS13/FullSetLoci3_cov/", 
                             pattern = "*.cov", full.names = T)
 
-overlap_files2 <- overlap_files[str_detect(overlap_files, "50KB") == F]
+overlap_files_seedling <- overlap_files_seedling[str_detect(overlap_files_seedling, "50KB") == F]
+overlap_files_seedling <- overlap_files_seedling[str_detect(overlap_files_seedling,
+                                                            "TIR|Gypsy|genes|seedling_loci.cov")]
 
-overlap_data <- sapply(overlap_files2, read_delim, simplify = FALSE, 
+overlap_data_seedling <- sapply(overlap_files_seedling, read_delim, simplify = FALSE, 
                        col_names = F, trim_ws = T, escape_double = FALSE, delim = "\t") %>% 
-  #sapply(mutate, Chr = as.numeric(X1), simplify = F) %>% 
-  #sapply(filter, is.na(Chr) == F, simplify = F) %>% 
-  #sapply(select, -X1, simplify = F) %>% 
+  bind_rows(.id = "id") 
+
+head(overlap_data_seedling)
+```
+
+```{r, warning= F, message = F} 
+overlap_files <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/loci_TE_coverages_2021_09_22/", 
+                            pattern = "*out.cov", full.names = T)
+
+overlap_data <- sapply(overlap_files, read_delim, simplify = FALSE, 
+                       col_names = F, trim_ws = T, escape_double = FALSE, delim = "\t") %>% 
   bind_rows(.id = "id") 
 
 head(overlap_data)
@@ -489,7 +745,7 @@ head(overlap_data_drm2)
 ## Egg, seedling, sperm, zygote
 ```{r}
 overlap_data_zyogte <- overlap_data %>% 
-  rbind(overlap_data_drm2) %>% 
+  rbind(overlap_data_drm2, overlap_data_seedling) %>% 
   mutate(ID = case_when(
     str_detect(id, "zygote-egg_com") ~ "Z loci - E loci", #12
     str_detect(id, "egg-zygote_com") ~ "E loci - Z loci", #3
@@ -500,32 +756,34 @@ overlap_data_zyogte <- overlap_data %>%
     str_detect(id, "sperm_loci") &
       str_detect(id, "endo") == F ~ "sperm siRNA loci", #9
     str_detect(id, "zygote_loci.bed") ~ "zygote siRNA loci", #10
-    str_detect(id, "fovary_loci") ~ "ovary (9hap) siRNA loci", 
-    str_detect(id, "ovary_loci") ~ "ovary (0hr) siRNA loci",
   )) %>% 
   filter(is.na(ID) == F) %>% 
    mutate(TE = case_when(
-   str_detect(id, "TIR") ~ "TIR",     #1
-   str_detect(id, "CentO") ~ "CentO",  #2
-   str_detect(id, "Gypsy") ~ "Gypsy",  #3
-   str_detect(id, "genes") ~ "genes",  #4
-   str_detect(id, "seedling_loci.cov") ~ "seedling siRNA loci", #5
-   str_detect(id, "DRM2") ~ "embryo DRM2 targets" #6
+   str_detect(id, "longTEs.out") ~ "long TEs",     #1
+   str_detect(id, "shortTEs.out") ~ "short TEs",  #2
+   str_detect(id, "CACTA") ~ "CACTA",  #3
+   str_detect(id, "seedling_loci.cov") ~ "seedling siRNA loci", #4
+   str_detect(id, "DRM2") ~ "embryo DRM2 targets", #5
+   str_detect(id, "TIR") ~ "TIR",     #6
+   str_detect(id, "Gypsy") ~ "Gypsy",  #7
+   str_detect(id, "genes") ~ "genes"   #8
   )) %>% 
-  filter(is.na(TE) == F)
+  filter(is.na(TE) == F)  
 
 head(overlap_data_zyogte)
 ```
+ 
+ 
 
 ### summary stats
-
 
 ```{r}
 overlap_data_zygote_TE_s <- overlap_data_zyogte %>%
   group_by(ID, TE) %>%
   summarise(
     NN = n(),
-    mean = mean(X7 * 100)
+    mean = mean(X7 * 100),
+    median = median(X7)
   ) %>% 
   ungroup()  
 
@@ -534,17 +792,11 @@ write_excel_csv(overlap_data_zygote_TE_s, "overlap_data_zygote_TE_s.csv")
 head(overlap_data_zygote_TE_s)
 ```
 ```{r}
-overlap_data_zygote_TE_s2 <- overlap_data_zygote_TE_s %>% 
-  filter(TE == "TIR" |
-           TE == "Gypsy" |
-           TE == "genes" |
-           TE == "seedling siRNA loci" |
-           TE == "embryo DRM2 targets") 
-
-overlap_data_zygote_TE_s2 %>% 
+overlap_data_zygote_TE_s %>% 
   group_by(TE) %>% 
   count()
 ```
+ 
 
 ### linear model 
 ```{r}
@@ -561,12 +813,12 @@ logistic <- function(x){
 }
 ```
 
-#### TIR, Gypsy 
+#### Long and short TEs 
 ```{r}
-model_zygote_cov_logit <- glm(X7 ~ ID*TE, data = overlap_data_zyogte %>% 
-                         filter(TE == "TIR" |
-                                  TE == "Gypsy"|
-                                  TE == "embryo DRM2 targets") %>% 
+model_zygote_cov_logit_longshort <- glm(X7 ~ ID*TE, data = overlap_data_zyogte %>% 
+                                filter(TE == "long TEs" |
+                                         TE== "short TEs"|
+                                         TE == "embryo DRM2 targets") %>% 
                          filter(ID == "seedling siRNA loci" |
                                  ID == "egg siRNA loci" |
                                  ID == "zygote siRNA loci" |
@@ -576,11 +828,57 @@ model_zygote_cov_logit <- glm(X7 ~ ID*TE, data = overlap_data_zyogte %>%
                         mutate(ID = case_when(
                                    str_detect(ID, "embryo siRNA loci") ~ "*embryo siRNA loci",
                                    T ~ ID
-                               )),
+                               )) %>% 
+                          group_by(ID) %>% 
+                          sample_n(10000),
+                       family = quasibinomial(link = "logit"))
+
+anova(model_zygote_cov_logit_longshort, test = "LRT")
+```
+```{r}
+est_z_cov_longshort <- emmeans(model_zygote_cov_logit_longshort, pairwise ~ ID | TE)
+est_z_cov_longshort$contrasts %>% 
+  as.data.frame() %>% 
+  select(contrast, TE, p.value)
+```
+```{r}
+z_cov_lm_results_longshort <- multcomp::cld(est_z_cov_longshort$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(mean_cov = logistic(emmean)) %>% 
+  mutate(group = str_remove_all(.group, " ")) %>% 
+  mutate(group = case_when(
+    TE == "short TEs" ~ group, 
+    T ~ toupper(group)
+  ))
+  
+z_cov_lm_results_longshort %>% 
+  select(ID, TE, group)
+```
+
+#### TIR and Gypsy TEs 
+```{r}
+model_zygote_cov_logit <- glm(X7 ~ ID*TE, data = overlap_data_zyogte %>% 
+                                filter(TE == "TIR" |
+                                         TE== "Gypsy"|
+                                         TE == "embryo DRM2 targets") %>% 
+                         filter(ID == "seedling siRNA loci" |
+                                 ID == "egg siRNA loci" |
+                                 ID == "zygote siRNA loci" |
+                                 ID == "sperm siRNA loci" |
+                                 ID == "embryo siRNA loci" |
+                                  str_detect(ID, "-")) %>% 
+                        mutate(ID = case_when(
+                                   str_detect(ID, "embryo siRNA loci") ~ "*embryo siRNA loci",
+                                   T ~ ID
+                               )) %>% 
+                                 group_by(ID) %>% 
+                                 sample_n(10000),
                        family = quasibinomial(link = "logit"))
 
 anova(model_zygote_cov_logit, test = "LRT")
 ```
+
+
 ```{r}
 est_z_cov <- emmeans(model_zygote_cov_logit, pairwise ~ ID | TE)
 est_z_cov$contrasts %>% 
@@ -597,8 +895,9 @@ z_cov_lm_results <- multcomp::cld(est_z_cov$emmeans, Letters = letters) %>%
     TE == "TIR" ~ group, 
     T ~ toupper(group)
   ))
-
-z_cov_lm_results
+  
+z_cov_lm_results %>% 
+  select(ID, TE, group)
 ```
 
 #### seedling siRNA loci coverage 
@@ -614,7 +913,9 @@ model_zygote_seedling_cov_logit <- glm(X7 ~ ID, data = overlap_data_zyogte %>%
                         mutate(ID = case_when(
                                    str_detect(ID, "embryo") ~ "*embryo siRNA loci",
                                    T ~ ID
-                               )),
+                               )) %>% 
+                          group_by(ID) %>% 
+                          sample_n(10000),
                        family = quasibinomial(link = "logit"))
 
 anova(model_zygote_seedling_cov_logit, test = "LRT")
@@ -637,9 +938,9 @@ z_sd_cov_lm_results
 
 ### plot 
 ```{r}
-overlap_data_zygote_TE_s2 %>% 
+overlap_data_zygote_TE_s %>% 
   filter(TE == "TIR" | 
-         TE == "Gypsy") %>% 
+        TE == "Gypsy") %>% 
   filter(ID == "seedling siRNA loci" |
            ID == "egg siRNA loci" |
            ID == "zygote siRNA loci" |
@@ -657,8 +958,8 @@ overlap_data_zygote_TE_s2 %>%
     "zygote siRNA loci",
     "Z loci - E loci",
     "*embryo siRNA loci",
-    "seedling siRNA loci" 
-  ))) %>% 
+    "seedling siRNA loci"
+  ))) %>%
   ggplot(aes(x = TE, y = mean)) +
   facet_grid(ID ~ ., switch = "y") +
   geom_bar(stat = "identity", aes(fill = TE), alpha = 0.8) +
@@ -669,7 +970,7 @@ overlap_data_zygote_TE_s2 %>%
             aes(label = group, y = mean_cov * 100, hjust = -0.3),
             size = 3.5, fontface = "bold") +
   scale_fill_manual(values = c("orange2", "grey70"),
-                   limits = c("TIR", "Gypsy")) +
+                 limits = c("TIR", "Gypsy")) +
   labs(x = NULL,
        y = "mean fraction of locus length\noverlapped by TEs (%)",
        fill = NULL) +
@@ -690,9 +991,116 @@ overlap_data_zygote_TE_s2 %>%
 ggsave("TE_overlap_lite.svg", width = 6, height = 4)
 ggsave("TE_overlap_lite.png", width = 6, height = 4)
 ```
+
+```{r}
+overlap_data_zygote_TE_s %>% 
+  filter(TE == "short TEs" | 
+        TE == "long TEs") %>% 
+  filter(ID == "seedling siRNA loci" |
+           ID == "egg siRNA loci" |
+           ID == "zygote siRNA loci" |
+           ID == "sperm siRNA loci" |
+           ID == "embryo siRNA loci" |
+           str_detect(ID, "-")) %>% 
+  mutate(ID = case_when(
+    str_detect(ID, "embryo") ~ "*embryo siRNA loci",
+    T ~ ID
+  )) %>% 
+  mutate(ID = factor(ID, levels = c(
+    "sperm siRNA loci",
+    "E loci - Z loci",
+    "egg siRNA loci",
+    "zygote siRNA loci",
+    "Z loci - E loci",
+    "*embryo siRNA loci",
+    "seedling siRNA loci"
+  ))) %>%
+  ggplot(aes(x = TE, y = mean)) +
+  facet_grid(ID ~ ., switch = "y") +
+  geom_bar(stat = "identity", aes(fill = TE), alpha = 0.8) +
+  geom_text(aes(label = signif(mean, 3)), size = 3.5, fontface = "bold", hjust = 0, y = 0) +
+  geom_text(data = z_cov_lm_results_longshort %>%
+              filter(TE == "short TEs" |
+                       TE == "long TEs"),
+            aes(label = group, y = mean_cov * 100, hjust = -0.3),
+            size = 3.5, fontface = "bold") +
+  scale_fill_manual(values = c("gold", "slateblue4"),
+                 limits = c("short TEs", "long TEs")) +
+  labs(x = NULL,
+       y = "mean fraction of locus length\noverlapped by TEs (%)",
+       fill = NULL) +
+  guides(fill = guide_legend(nrow = 1)) + 
+  guides(color = F) +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  theme(text = element_text(size = 14, face="bold")) +
+  theme(panel.grid.minor.y = element_blank(), 
+        panel.grid.major.y = element_blank()) +
+  theme(axis.line = element_line(size = 1.1)) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_blank()) +
+  theme(strip.placement = "outside") + 
+  theme(strip.text.y.left = element_text(angle = 0)) +
+  coord_flip()
+
+ggsave("short_longTE_overlap_lite.svg", width = 6, height = 4)
+ggsave("short_longTE_overlap_lite.png", width = 6, height = 4)
+```
+
+```{r}
+overlap_data_zygote_TE_s %>% 
+  filter(TE == "short TEs" | 
+        TE == "long TEs"|
+          TE == "CACTA") %>% 
+  filter(ID == "seedling siRNA loci" |
+           ID == "egg siRNA loci" |
+           ID == "zygote siRNA loci" |
+           ID == "sperm siRNA loci" |
+           ID == "embryo siRNA loci" |
+           str_detect(ID, "-")) %>% 
+  mutate(ID = case_when(
+    str_detect(ID, "embryo") ~ "*embryo siRNA loci",
+    T ~ ID
+  )) %>% 
+  mutate(ID = factor(ID, levels = c(
+    "sperm siRNA loci",
+    "E loci - Z loci",
+    "egg siRNA loci",
+    "zygote siRNA loci",
+    "Z loci - E loci",
+    "*embryo siRNA loci",
+    "seedling siRNA loci"
+  ))) %>%
+  ggplot(aes(x = TE, y = mean)) +
+  facet_grid(ID ~ ., switch = "y") +
+  geom_bar(stat = "identity", aes(fill = TE), alpha = 0.8) +
+  geom_text(aes(label = signif(mean, 3)), size = 3.5, fontface = "bold", hjust = 0, y = 0) +
+  scale_fill_manual(values = c("gold", "slateblue4", "indianred3"),
+                 limits = c("short TEs", "long TEs", "CACTA")) +
+  labs(x = NULL,
+       y = "mean fraction of locus length\noverlapped by TEs (%)",
+       fill = NULL) +
+  guides(fill = guide_legend(nrow = 1)) + 
+  guides(color = F) +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  theme(text = element_text(size = 14, face="bold")) +
+  theme(panel.grid.minor.y = element_blank(), 
+        panel.grid.major.y = element_blank()) +
+  theme(axis.line = element_line(size = 1.1)) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_blank()) +
+  theme(strip.placement = "outside") + 
+  theme(strip.text.y.left = element_text(angle = 0)) +
+  coord_flip()
+
+ggsave("CACTA_overlap_lite.svg", width = 6, height = 5)
+ggsave("CACTA_short_longTE_overlap_lite.png", width = 6, height = 5)
+```
+
  
 ```{r}
-overlap_data_zygote_TE_s2 %>% 
+overlap_data_zygote_TE_s %>% 
   filter(TE == "seedling siRNA loci" |
            TE == "embryo DRM2 targets") %>% 
   filter(ID == "seedling siRNA loci" |
@@ -718,12 +1126,12 @@ overlap_data_zygote_TE_s2 %>%
   facet_grid(ID ~ ., switch = "y") +
   geom_bar(stat = "identity", aes(fill = TE), alpha = 0.5) +
   geom_text(aes(label = signif(mean, 3)), size = 3.5, fontface = "bold", hjust = 0, y = 0) +
-  geom_text(data = z_sd_cov_lm_results %>% 
-              mutate(TE = "seedling siRNA loci"), 
+  geom_text(data = z_sd_cov_lm_results %>%
+              mutate(TE = "seedling siRNA loci"),
             aes(label = group, y = mean_cov * 100, hjust = -0.3, vjust = 0.5),
             size = 3.5, fontface = "bold") +
-  geom_text(data = z_cov_lm_results %>% 
-              filter(TE == "embryo DRM2 targets"), 
+  geom_text(data = z_cov_lm_results %>%
+              filter(TE == "embryo DRM2 targets"),
             aes(label = group, y = mean_cov * 100, hjust = -0.3, vjust = 0.5),
             size = 3.5, fontface = "bold") +
   scale_fill_manual(values = c("seagreen", "blue2"),
@@ -946,6 +1354,7 @@ ggsave("partition_of_DRM2_targets_scatter.png", height = 6, width = 5)
 ## sirens overlap
 ```{r}
 overlap_data_siren <- overlap_data %>% 
+  rbind(overlap_data_seedling) %>% 
    filter(str_detect(id, "NOT") == F) %>% 
    filter(str_detect(id, "siren")) 
 
@@ -965,9 +1374,11 @@ overlap_data_siren <- overlap_data_siren %>%
   # str_detect(id, "Copia") ~ "Copia",   #4
   # str_detect(id, "LINE") ~ "LINE",    #5
   # str_detect(id, "SINE") ~ "SINE",     #6
-  # str_detect(id, "CACTA") ~ "CACTA",    #7
+   str_detect(id, "CACTA") ~ "CACTA",    #7
   # str_detect(id, "Helitron") ~ "Helitron",  #8
-   str_detect(id, "genes") ~ "genes"  #9
+   str_detect(id, "genes") ~ "genes",  #9
+  str_detect(id, "longTE") ~ "long TEs", #10
+  str_detect(id, "shortTE") ~ "short TEs" #11 
   )) %>% 
   filter(is.na(TE) == F)
 
@@ -990,6 +1401,10 @@ head(overlap_data_siren_TE_s)
 overlap_data_siren_TE_s %>% 
   filter(TE == "Gypsy") %>% 
   arrange(mean)
+
+overlap_data_siren_TE_s %>% 
+  filter(TE == "long TEs") %>% 
+  arrange(mean)
 ```
 ### plot
 ```{r}
@@ -1006,7 +1421,58 @@ overlap_data_siren_TE_s %>%
     TE == "genes" ~ "genes",
     T ~ "TE"
   )) %>% 
-  filter(TE != "CentO") %>% 
+  filter(TE == "genes" | 
+           TE == "short TEs" |
+           TE == "long TEs") %>% 
+  mutate(TE = factor(TE, levels = c(
+     "genes", "short TEs", "long TEs" 
+  ))) %>% 
+  ggplot(aes(x = ID, y = mean)) +
+  geom_bar(stat = "identity", aes(fill = TE), alpha = 0.8) +
+  annotate(geom = "text", label = c("b", "a", "a", "a", "a"),
+           x = c(1, 2, 3, 4, 5),
+           y = c(30, 35, 35, 50, 50),
+           hjust = -0.1, size = 5, fontface = "bold", color = "grey90") +
+  scale_fill_manual(values = c("grey10", 
+                               "gold", "slateblue4"),
+                   limits = c("genes", "short TEs", "long TEs")) +
+  labs(x = NULL,
+       y = "mean fraction of locus length\noverlapped by TEs or genes (%)",
+       fill = NULL) +
+  guides(fill = guide_legend(nrow = 1)) + 
+  guides(color = F) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  theme(text = element_text(size = 14, face="bold")) +
+  theme(panel.grid.minor.y = element_blank(), 
+        panel.grid.major.y = element_blank()) +
+  theme(axis.line = element_line(size = 1.2)) +
+  theme(axis.text.x=element_text(colour = "black")) +
+  theme(axis.text.y=element_text(colour = "black", hjust = 0.5)) +
+  coord_flip()
+
+ggsave("TE_overlap_stackbar.svg", height = 3.5, width = 7)
+ggsave("TE_overlap_stackbar.png", height = 3.5, width = 7)
+```
+
+
+```{r}
+##total overlap
+overlap_data_siren_TE_s %>% 
+  mutate(ID = factor(ID, levels = c(
+    "endosperm siren loci",
+    "ovary (9hap) siren loci",
+    "ovary (0hr) siren loci",
+    "zygote siren loci",
+    "egg siren loci"
+  ))) %>%
+  mutate(type2 = case_when(
+    TE == "genes" ~ "genes",
+    T ~ "TE"
+  )) %>% 
+  filter(TE == "genes" | 
+           TE == "TIR" |
+           TE == "Gypsy") %>% 
   mutate(TE = factor(TE, levels = c(
      "genes", "TIR", "Gypsy" 
   ))) %>% 
@@ -1017,7 +1483,7 @@ overlap_data_siren_TE_s %>%
            y = c(30, 25, 25, 40, 40),
            hjust = -0.1, size = 5, fontface = "bold", color = "grey90") +
   scale_fill_manual(values = c("grey10", 
-                               "orange2", "grey70"),
+                               "orange2", "grey80"),
                    limits = c("genes", "TIR", "Gypsy")) +
   labs(x = NULL,
        y = "mean fraction of locus length\noverlapped by TEs or genes (%)",
@@ -1034,8 +1500,9 @@ overlap_data_siren_TE_s %>%
   theme(axis.text.y=element_text(colour = "black", hjust = 0.5)) +
   coord_flip()
 
-ggsave("TE_overlap_stackbar.svg", height = 3.5, width = 6)
-ggsave("TE_overlap_stackbar.png", height = 3.5, width = 6)
+
+ggsave("TE_overlap_stackbar2.svg", height = 3.5, width = 7)
+ggsave("TE_overlap_stackbar2.png", height = 3.5, width = 7)
 ```
 
 ```{r}
@@ -1054,7 +1521,7 @@ overlap_data_siren %>% head()
 
 model_siren_overlap <- glm(X7 ~ ID * TE, data = overlap_data_siren %>% 
                              filter(str_detect(ID, "siren")) %>%
-                             filter(str_detect(TE, "genes|TIR|Gypsy")),
+                             filter(str_detect(TE, "genes|short TEs|long TEs")),
                                     family = quasibinomial()) 
 
 anova(model_siren_overlap, test = "LRT")
@@ -1075,115 +1542,4 @@ est_siren_TE_overlap$contrasts %>%
  
 
  
-# Gypsy overlap vs not Gypsy overlap on sirens
-```{r}
-siren_gypsy <- overlap_data_siren %>% 
-  filter(TE == "Gypsy") %>% 
-  filter(str_detect(ID, "siren")) %>% 
-  rename(Chr = X1,
-         start = X2,
-         end = X3)
 
-head(siren_gypsy)
-```
-
-```{r, warning = F, message=F} 
-ovary_siren_loci <- read_csv("ovary_siren_loci.csv")
-egg_siren_loci <- read_csv("egg_siren_loci.csv")
-zygote_siren_loci <- read_csv("zygote_siren_loci.csv")
-fovary_siren_loci <- read_csv("fovary_siren_loci.csv")
-
-siren_ov_e_z <- rbind(ovary_siren_loci, egg_siren_loci, zygote_siren_loci, fovary_siren_loci)
-head(siren_ov_e_z)
-```
-
-```{r}
-siren_gypsy2 <- siren_gypsy %>% 
-  right_join(siren_ov_e_z, by = c("Chr", "start", "end")) %>% 
-  mutate(overlap = case_when(
-    X7 > 0.33 ~ "Y",
-    T ~ "N"
-  ))
-
-head(siren_gypsy2)
-```
-
-## stat 
-```{r}
-summary(siren_gypsy2$sample_type %>% 
-          as.factor())
-```
-
-```{r}
-model_siren_gypsy <- lm(log10(RPKM) ~ overlap * sample_type, siren_gypsy2)
-anova(model_siren_gypsy)
-```
-
-```{r}
-est_siren_gyspy <- emmeans(model_siren_gypsy, pairwise ~ overlap | sample_type)
-
-siren_gyspy.P <- est_siren_gyspy$contrasts %>% 
-  as.data.frame()
-
-siren_gyspy.P
-```
-
-```{r}
-siren_gypsy_s <- siren_gypsy2 %>% 
-  group_by(overlap, sample_type) %>% 
-  summarise(
-     NN = n(),
-     median = median(RPKM),
-     Q3 = quantile(RPKM, 0.75),
-     Q1 = quantile(RPKM, 0.25),
-     UL = quantile(RPKM, 0.975),
-     LL = quantile(RPKM, 0.025),
-     mean = mean(RPKM)
-  )
-
-siren_gypsy_s
-```
-## plot 
-```{r}
-siren_gypsy_s %>% 
-  mutate(overlap2 = case_when(
-    overlap == "Y" ~ ">= 33% of\nlocus length\noverlap Gypsy",
-    T ~ "< 33% of\nlocus length\noverlap Gypsy"
-  )) %>% 
-  ggplot(aes(x = overlap2)) +
-  facet_grid(. ~ sample_type) + 
-  geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median), width = 0.3, alpha = 0.8) +
-  geom_segment(aes(x = overlap2, xend = overlap2,  y = Q3, yend = UL)) +
-  geom_segment(aes(x = overlap2, xend = overlap2,  y = Q1, yend = LL)) +
-  geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.1, size = 1) +
-  geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.1, size = 1) + 
-  geom_text(aes(label = paste(
-    "n = ", NN, sep = ""
-  ), y = Q1), size = 3, fontface = "bold", vjust = -2, hjust = 0) +
-  geom_text(data = siren_gyspy.P %>% 
-              mutate(overlap2 = "< 33% of\nlocus length\noverlap Gypsy") %>% 
-              mutate(y = 500), 
-            aes(label = paste("P = ", signif(p.value, 2), sep = ""), 
-                y = y, vjust = -5), 
-            size = 3, fontface = "bold") +
-  scale_y_log10(breaks = c(100, 1000)) +
-  #scale_x_discrete(label = NULL) +
-  labs(y = "RPKM at siren loci",
-       x = NULL,
-       fill = NULL) +
-  theme_minimal() +
-  theme(
-    axis.line = element_line(size = 1.2),
-    text = element_text(size = 14, color = "black", face = "bold"),
-    axis.text = element_text(color = "black", face = "bold"),
-    axis.text.y = element_text(hjust = 0.5),
-    panel.grid = element_blank(),
-    legend.position = "bottom",
-    strip.placement = "outside",
-    legend.direction = "vertical"
-    )  +
-  coord_flip() 
-
-ggsave("siren_gypsy.svg", height = 3, width = 7.5)
-ggsave("siren_gypsy.png", height = 3, width = 7.5)
-```

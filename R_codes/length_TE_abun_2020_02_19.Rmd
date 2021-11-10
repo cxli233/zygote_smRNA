@@ -1068,8 +1068,8 @@ siren_graph <- siren_counts %>%
   coord_flip()
 
 siren_graph
-ggsave("siRNA_24_egg_siren_bar.svg", height = 3, width = 3.5)
-ggsave("siRNA_24_egg_siren_bar.png", height = 3, width = 3.5)
+ggsave("siRNA_24_egg_siren_bar.svg", height = 4.5, width = 4.5)
+ggsave("siRNA_24_egg_siren_bar.png", height = 4.5, width = 4.5)
 ```
 
 ### zygote and egg 
