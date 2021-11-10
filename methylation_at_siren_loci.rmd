@@ -1,0 +1,788 @@
+---
+title: "methylation_at_siren_loci"
+author: "Chenxin Li"
+date: "12/30/2020"
+output:
+  html_notebook:
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+  html_document:
+    toc: yes   
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(readxl)
+library(emmeans) 
+library(stringr)
+library(RColorBrewer)
+library(svglite)
+library(cowplot) 
+```
+
+# load data
+## egg 
+
+ 
+```{r warning=F, message=F}
+meth_egg_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/full_MTRs_zes_2021_10_13/egg_siren/", 
+                        pattern = "*.mtr", full.names = T) 
+
+meth_egg_data <- sapply(meth_egg_list, read_delim, simplify = FALSE, 
+                       delim = "\t", col_names = F, escape_double = F, trim_ws = T) %>% 
+  bind_rows(.id = "id")
+
+head(meth_egg_data)
+```
+ 
+## zygote at zygote siren 
+```{r warning=F, message=F}
+meth_zy_list_z <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/full_MTRs_zes_2021_10_13/zygote_zygote_siren/", 
+                        pattern = "*.mtr", full.names = T) 
+
+meth_zy_data_z <- sapply(meth_zy_list_z, read_delim, simplify = FALSE, 
+                       delim = "\t", col_names = F, escape_double = F, trim_ws = T) %>% 
+  bind_rows(.id = "id")
+
+head(meth_zy_data_z)
+```
+ 
+ 
+## embryo at zygote siren
+```{r}
+meth_zy_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/full_MTRs_zes_2021_10_13/embryo_zygote_siren/", 
+                        pattern = "*.mtr", full.names = T) 
+
+meth_zy_data <- sapply(meth_zy_list, read_delim, simplify = FALSE, 
+                       delim = "\t", col_names = F, escape_double = F, trim_ws = T) %>% 
+  bind_rows(.id = "id")
+
+head(meth_zy_data)
+```
+
+## endosperm
+```{r warning=F, message=F}
+meth_en_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/full_MTRs_zes_2021_10_13/endosperm_endosperm_siren/", 
+                        pattern = "*.mtr", full.names = T) 
+
+meth_en_data <- sapply(meth_en_list, read_delim, simplify = FALSE, 
+                       delim = "\t", col_names = F, escape_double = F, trim_ws = T) %>% 
+  bind_rows(.id = "id")
+
+head(meth_en_data)
+```
+## ovary
+```{r message=F, warning= F}
+meth_ov_list <- list.files(path = "C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/full_MTRs_zes_2021_10_13/ovary_siren/", 
+                        pattern = "*.mtr", full.names = T) 
+
+meth_ov_data <- sapply(meth_ov_list, read_delim, simplify = FALSE, 
+                       delim = "\t", col_names = F, escape_double = F, trim_ws = T) %>% 
+  bind_rows(.id = "id")
+
+head(meth_ov_data)
+```
+ 
+
+
+## the siren loci
+```{r message=F}
+egg_siren <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/Shortstack_code_and_output_downsampled/egg_siren_loci.csv") 
+
+endo_siren <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/Shortstack_code_and_output_downsampled/endosperm_siren_loci.csv") 
+
+ovary_siren <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/Shortstack_code_and_output_downsampled/ovary_siren_loci.csv") 
+
+zygote_siren <- read_csv("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS12/Shortstack_code_and_output_downsampled/zygote_siren_loci.csv") 
+
+head(zygote_siren)
+```
+
+# keying data
+ 
+## egg
+```{r}
+meth_egg_data_nice <- meth_egg_data %>% 
+  filter(X7 >= 3) %>% 
+  mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>% 
+  mutate(category = case_when(
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+    str_detect(id, "egg_siren_loci.mtr") ~ "egg siren loci",
+    str_detect(id, "egg_loci") & 
+      tag %in% egg_siren$`#Locus` == F ~ "egg siRNA NOT siren loci"
+  )) %>% 
+  filter(is.na(category) == F) %>% 
+   mutate(sample_ID = case_when(
+     str_detect(id, "egg100_1") ~ "Li et al 1", 
+     str_detect(id, "egg100_2") ~ "Li et al 2",
+     str_detect(id, "SRR10915149") ~ "Zhou et al 1",
+     str_detect(id, "SRR10915150") ~ "Zhou et al 2" ,
+     T ~ "Park et al",
+   )) %>% 
+   mutate(context = case_when(
+    str_detect(id, "gz.CG.") ~ "mCG", 
+    str_detect(id, "gz.CHG.") ~ "mCHG", 
+    str_detect(id, "gz.CHH.") ~ "mCHH"
+  ))   
+
+head(meth_egg_data_nice)
+```
+
+```{r}
+meth_egg_data_nice %>% 
+  group_by(context, sample_ID, category) %>% 
+  tally()
+```
+ 
+## endosperm
+```{r}
+meth_en_data %>% 
+  head()
+
+str_length("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/full_MTRs_zes_2021_10_13/endosperm_endosperm_siren/")
+```
+
+```{r}
+meth_en_data_nice <- meth_en_data %>% 
+  filter(X7 >= 3) %>% 
+  mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>% 
+  mutate(category = case_when(
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+    str_detect(id, "endo_siren_loci.mtr") ~ "endosperm siren loci",
+    str_detect(id, "endosperm_loci") & 
+      tag %in% endo_siren$`#Locus` == F ~ "endosperm siRNA NOT siren loci"
+  )) %>% 
+  filter(is.na(category) == F) %>% 
+   mutate(sample_ID = str_sub(id, start = 140, end = 140+4)) %>% 
+   mutate(context = case_when(
+    str_detect(id, "gz.CG.") ~ "mCG", 
+    str_detect(id, "gz.CHG.") ~ "mCHG", 
+    str_detect(id, "gz.CHH.") ~ "mCHH"
+  )) %>% 
+  mutate(tissue = "endosperm") %>% 
+   mutate(genotype = case_when(
+    str_detect(id, "52_") ~ "drm2",
+    str_detect(sample_ID, "wt") ~ "WT",
+    T ~ "WT"
+  ))  
+```
+
+```{r}
+meth_en_data_nice %>% 
+  group_by(context, sample_ID, category, tissue, genotype) %>% 
+  tally()
+```
+
+## zygote
+### zygote at zygote
+```{r}
+str_length("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/full_MTRs_zes_2021_10_13/zygote_zygote_siren/")
+```
+```{r}
+meth_zy_data_nice_z <- meth_zy_data_z %>% 
+  filter(X7 >= 3) %>% 
+  mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>% 
+   mutate(category = case_when(
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+    str_detect(id, "zygote_siren_loci.mtr") ~ "zygote siren loci",
+    str_detect(id, "zygote_loci") & 
+      tag %in% zygote_siren$`#Locus` == F ~ "zygote siRNA NOT siren loci"
+  )) %>% 
+  filter(is.na(category) == F) %>%
+   mutate(sample_ID = case_when(
+     str_detect(id, "SRR10915153") ~ "Zhou et al 1",
+     str_detect(id, "SRR10915154") ~ "Zhou et al 2" ,
+   )) %>% 
+   mutate(context = case_when(
+    str_detect(id, "gz.CG.") ~ "mCG", 
+    str_detect(id, "gz.CHG.") ~ "mCHG", 
+    str_detect(id, "gz.CHH.") ~ "mCHH"
+  )) %>% 
+  mutate(tissue = "zygote")  
+```
+
+```{r}
+meth_zy_data_nice_z %>% 
+  group_by(context, sample_ID, category, tissue) %>% 
+  tally()
+```
+
+### embryo at zygote 
+```{r}
+meth_zy_data %>% 
+  head()
+
+str_length("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/full_MTRs_zes_2021_10_13/embryo_zygote_siren/")
+```
+
+```{r}
+meth_zy_data_nice <- meth_zy_data %>% 
+  filter(X7 >= 3) %>% 
+  mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>% 
+   mutate(category = case_when(
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+    str_detect(id, "zygote_siren_loci.mtr") ~ "zygote siren loci",
+    str_detect(id, "zygote_loci") & 
+      tag %in% zygote_siren$`#Locus` == F ~ "zygote siRNA NOT siren loci"
+  )) %>% 
+  filter(is.na(category) == F) %>%
+   mutate(sample_ID = str_sub(id, start = 134, end = 134+4)) %>% 
+   mutate(context = case_when(
+    str_detect(id, "gz.CG.") ~ "mCG", 
+    str_detect(id, "gz.CHG.") ~ "mCHG", 
+    str_detect(id, "gz.CHH.") ~ "mCHH"
+  )) %>% 
+  mutate(tissue = "embryo") %>% 
+   mutate(genotype = case_when(
+    str_detect(id, "52_") ~ "drm2",
+    str_detect(sample_ID, "wt") ~ "WT",
+    T ~ "WT"
+  ))  
+```
+
+```{r}
+meth_zy_data_nice %>% 
+  group_by(context, sample_ID, category, tissue, genotype) %>% 
+  tally()
+```
+
+## ovary 
+```{r}
+meth_ov_data %>% 
+  head()
+
+str_length("C:/Users/cxli9/Desktop/Li/PBI/PBI299 (Sundar Lab)/smRNA project/CLVS_zygote_GR_revision/full_MTRs_zes_2021_10_13/ovary_siren/")
+```
+
+```{r}
+meth_ov_data_nice <- meth_ov_data %>% 
+  filter(X7 >= 3) %>% 
+  mutate(tag = paste(X1, ":", X2, "-", X3, sep = "")) %>% 
+  mutate(category = case_when(
+    str_detect(id, "seedling_loci") ~ "seedling siRNA loci",
+    str_detect(id, "ovary_siren_loci.mtr") ~ "ovary siren loci",
+    str_detect(id, "ovary_loci") & 
+      tag %in% ovary_siren$`#Locus` == F ~ "ovary siRNA NOT siren loci"
+  )) %>% 
+  filter(is.na(category) == F) %>%
+   mutate(sample_ID = str_sub(id, start = 126, end = 126+2)) %>% 
+   mutate(context = case_when(
+    str_detect(id, "gz.CG.") ~ "mCG", 
+    str_detect(id, "gz.CHG.") ~ "mCHG", 
+    str_detect(id, "gz.CHH.") ~ "mCHH"
+  )) %>% 
+  mutate(tissue = "ovary") %>% 
+  mutate(genotype = "WT")  
+```
+ 
+```{r}
+meth_ov_data_nice %>% 
+  group_by(context, sample_ID, category, tissue, genotype) %>% 
+  tally()
+```
+
+# stat
+## summary stats
+### egg
+```{r}
+meth_egg_data_nice_ss <- meth_egg_data_nice %>% 
+  group_by(category, context, sample_ID) %>%
+  summarise(
+    NN = n(),
+    median = median(X4),
+    Q3 = quantile(X4, 0.75),
+    Q1 = quantile(X4, 0.25),
+    UL = quantile(X4, 0.975),
+    LL = quantile(X4, 0.025)
+  ) %>% 
+  ungroup() 
+
+meth_egg_data_nice_ss
+```
+
+### endosperm 
+```{r}
+meth_en_data_nice_s <- meth_en_data_nice %>% 
+  group_by(X1, X2, X3, category, tissue, context, genotype) %>% 
+  summarise(meth = mean(X4)) %>% 
+  ungroup()
+
+meth_en_data_nice_ss <- meth_en_data_nice_s %>% 
+  group_by(category, context, genotype, tissue) %>%
+  summarise(
+    NN = n(),
+    median = median(meth),
+    Q3 = quantile(meth, 0.75),
+    Q1 = quantile(meth, 0.25),
+    UL = quantile(meth, 0.975),
+    LL = quantile(meth, 0.025)
+  ) %>% 
+  ungroup() 
+
+meth_en_data_nice_ss
+```
+
+
+### zygote 
+```{r}
+meth_zy_data_nice_z_ss <- meth_zy_data_nice_z %>% 
+  group_by(category, context, tissue, sample_ID) %>%
+  summarise(
+    NN = n(),
+    median = median(X4),
+    Q3 = quantile(X4, 0.75),
+    Q1 = quantile(X4, 0.25),
+    UL = quantile(X4, 0.975),
+    LL = quantile(X4, 0.025)
+  ) %>% 
+  ungroup() 
+
+meth_zy_data_nice_z_ss
+```
+
+### embryo
+```{r}
+meth_zy_data_nice_s <- meth_zy_data_nice %>% 
+  group_by(X1, X2, X3, category, tissue, context, genotype) %>% 
+  summarise(meth = mean(X4)) %>% 
+  ungroup()
+
+meth_zy_data_nice_ss <- meth_zy_data_nice_s %>% 
+  group_by(category, context, genotype, tissue) %>%
+  summarise(
+    NN = n(),
+    median = median(meth),
+    Q3 = quantile(meth, 0.75),
+    Q1 = quantile(meth, 0.25),
+    UL = quantile(meth, 0.975),
+    LL = quantile(meth, 0.025)
+  ) %>% 
+  ungroup() 
+
+meth_zy_data_nice_ss
+```
+
+
+
+### ovary 
+```{r}
+meth_ov_data_nice_s <- meth_ov_data_nice %>% 
+  group_by(X1, X2, X3, category, tissue, context, genotype) %>% 
+  summarise(meth = mean(X4)) %>% 
+  ungroup()
+
+meth_ov_data_nice_ss <- meth_ov_data_nice_s %>% 
+  group_by(category, context, genotype, tissue) %>%
+  summarise(
+    NN = n(),
+    median = median(meth),
+    Q3 = quantile(meth, 0.75),
+    Q1 = quantile(meth, 0.25),
+    UL = quantile(meth, 0.975),
+    LL = quantile(meth, 0.025)
+  ) %>% 
+  ungroup() 
+
+meth_ov_data_nice_ss
+```
+
+
+## linear models
+```{r}
+logit <- function(p){log(
+  p / (1-p)
+)}
+
+logistic <- function(x){
+  1/(1 + exp(-x))
+}
+```
+
+### egg 
+```{r}
+model_egg <- glm(X4 ~ context * sample_ID * category, data = meth_egg_data_nice, 
+                 family = quasibinomial(link = "logit")) 
+```
+
+```{r}
+est_egg <- emmeans(model_egg, pairwise ~ category | sample_ID | context)
+egg_results <- multcomp::cld(est_egg$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_remove_all(.group, " "))
+
+
+egg_contrasts <- est_egg$contrasts %>% 
+  as.data.frame()
+
+egg_results %>% 
+  select(category, sample_ID, context, grouping) %>% 
+  filter(context == "mCHH")
+```
+
+
+### ovary
+```{r}
+model_ov <- glm(meth ~ context * category, data = meth_ov_data_nice_s, 
+                 family = quasibinomial(link = "logit")) 
+```
+
+```{r}
+est_ov <- emmeans(model_ov, pairwise ~ category | context)
+ov_results <- multcomp::cld(est_ov$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_remove_all(.group, " "))
+
+
+ov_contrasts <- est_ov$contrasts %>% 
+  as.data.frame()
+
+ov_results
+ov_contrasts
+```
+
+### zygote
+```{r}
+model_zg <- glm(X4 ~ context * category * sample_ID, 
+                   data = meth_zy_data_nice_z, 
+                 family = quasibinomial(link = "logit")) 
+```
+
+```{r}
+est_z <- emmeans(model_zg, pairwise ~ category | context | sample_ID)
+z_results <- multcomp::cld(est_z$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_remove_all(.group, " "))
+
+
+z_contrasts <- est_z$contrasts %>% 
+  as.data.frame()
+
+z_results
+z_contrasts
+```
+
+
+### em
+```{r}
+model_em <- glm(meth ~ context * genotype * category, 
+                   data = meth_zy_data_nice_s, 
+                 family = quasibinomial(link = "logit")) 
+```
+
+```{r}
+est_em <- emmeans(model_em, pairwise ~ category | context | genotype)
+em_results <- multcomp::cld(est_em$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_remove_all(.group, " "))
+
+
+em_contrasts <- est_em$contrasts %>% 
+  as.data.frame()
+
+em_results
+em_contrasts
+```
+
+### en
+```{r}
+model_en <- glm(meth ~ context * genotype * category, 
+                   data = meth_en_data_nice_s, 
+                 family = quasibinomial(link = "logit")) 
+
+anova(model_en, test = "LRT")
+```
+
+```{r}
+est_en <- emmeans(model_en, pairwise ~ category | context | genotype)
+en_results <- multcomp::cld(est_en$emmeans, Letters = letters) %>% 
+  as.data.frame() %>% 
+  mutate(grouping = str_remove_all(.group, " ")) 
+
+
+en_contrasts <- est_en$contrasts %>% 
+  as.data.frame()
+
+en_results
+en_contrasts
+``` 
+
+
+# plot
+## egg
+```{r}
+egg_plot <- meth_egg_data_nice_ss %>% 
+  inner_join(egg_results, by = c("category", "sample_ID", "context")) %>% 
+  mutate(pos = case_when(
+    context == "mCG" ~ Q1,
+    T ~ Q3
+  )) %>% 
+  mutate(hjust = case_when(
+    context == "mCG" ~ 1.2,
+    T ~ -0.2
+  )) %>% 
+  ggplot(aes(x = category)) +
+  facet_grid(sample_ID ~ context, switch = "both") + 
+  geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median, fill = category), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = category, xend = category,  y = Q3, yend = UL)) +
+  geom_segment(aes(x = category, xend = category,  y = Q1, yend = LL)) +
+  geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.3, size = 1) +
+  geom_text(aes(label = grouping, y = pos, hjust = hjust), 
+            vjust = -0.2, size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("tomato1", "grey20", "seagreen")) +
+  scale_y_continuous(breaks = c(0, 0.5, 1)) + 
+  guides(fill = guide_legend(title.position = "top",
+                             title.hjust = 0.5)) +
+  labs(x = NULL, 
+       y = NULL, 
+       fill = "locus category") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14, face = "bold", colour = "black"),
+    axis.text = element_text(colour = "black"), 
+    axis.text.y = element_blank(),
+    strip.placement = "outside",
+    strip.text.y.left = element_text(face = "bold", angle = 0, hjust = 0.5),
+    panel.spacing = unit(1, "lines"),
+    axis.line = element_line(size = 1),
+    legend.position = "top"
+  ) +
+  coord_flip()  
+
+egg_plot 
+```
+
+## ovary
+```{r}
+ov_plot <- meth_ov_data_nice_ss %>% 
+  inner_join(ov_results, by = c("category", "context")) %>% 
+  mutate(pos = case_when(
+    context == "mCHH" ~ Q3,
+    T ~ Q1
+  )) %>% 
+  mutate(hjust = case_when(
+    context == "mCHH" ~ -0.2,
+    T ~ 1.2
+  )) %>% 
+  ggplot(aes(x = category)) +
+  facet_grid(tissue ~ context, switch = "both") + 
+  geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median, fill = category), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = category, xend = category,  y = Q3, yend = UL)) +
+  geom_segment(aes(x = category, xend = category,  y = Q1, yend = LL)) +
+  geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.3, size = 1) +
+  geom_text(aes(label = grouping, y = pos, hjust = hjust), 
+            vjust = -0.2, size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("orangered3", "grey20", "seagreen")) + 
+  scale_y_continuous(breaks = c(0, 0.5, 1)) + 
+  guides(fill = guide_legend(title.position = "top",
+                             title.hjust = 0.5)) +
+  labs(x = NULL, 
+       y = NULL,
+       fill = "locus category") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14, face = "bold", colour = "black"),
+    axis.text = element_text(colour = "black"), 
+    axis.text.y = element_blank(), 
+    strip.placement = "outside",
+    strip.text.y.left = element_text(face = "bold", angle = 0, hjust = 0.5),
+    panel.spacing = unit(1, "lines"),
+    axis.line = element_line(size = 1),
+    legend.position = "top"
+  ) +
+  coord_flip()  
+
+ov_plot
+```
+## zygote meth data at zygote siRNA loci
+```{r}
+zy_plot <- meth_zy_data_nice_z_ss %>% 
+  inner_join(z_results, by = c("category", "context", "sample_ID")) %>% 
+  mutate(pos = case_when(
+    context == "mCG" ~ Q1,
+    T ~ Q3
+  )) %>% 
+  mutate(hjust = case_when(
+    context == "mCG" ~ 1.2,
+    T ~ -0.2
+  )) %>% 
+  mutate(category = factor(category, levels = c(
+    "zygote siren loci", 
+    "zygote siRNA NOT siren loci", 
+    "seedling siRNA loci"
+  ))) %>% 
+  ggplot(aes(x = category)) +
+  facet_grid(sample_ID~ context, switch = "both") + 
+   geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median, fill = category), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = category, xend = category,  y = Q3, yend = UL)) +
+  geom_segment(aes(x = category, xend = category,  y = Q1, yend = LL)) +
+  geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.3, size = 1) + 
+  geom_text(aes(label = grouping, y = pos, hjust = hjust), 
+            vjust = -0.2, size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("violetred4", "grey20", "seagreen"),
+                    limits = c("zygote siren loci", 
+                               "zygote siRNA NOT siren loci", 
+                               "seedling siRNA loci")) + 
+  scale_y_continuous(breaks = c(0, 0.5, 1)) + 
+  guides(fill = guide_legend(title.position = "top",
+                             title.hjust = 0.5)) +
+  labs(x = NULL, 
+       y = NULL,
+       fill = "locus category") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14, face = "bold", colour = "black"),
+    axis.text = element_text(colour = "black"), 
+    axis.text.y = element_blank(), 
+    strip.placement = "outside",
+    strip.text.y.left = element_text(face = "bold", angle = 0, hjust = 0.5),
+    panel.spacing = unit(1, "lines"),
+    axis.line = element_line(size = 1),
+    legend.position = "top"
+  ) +
+  coord_flip()  
+
+zy_plot
+```
+
+
+## embryo meth data at zygote siRNA loci
+```{r}
+em_plot <- meth_zy_data_nice_ss %>% 
+  inner_join(em_results, by = c("category", "context", "genotype")) %>% 
+  mutate(pos = case_when(
+    context == "mCG" ~ Q1,
+    T ~ Q3
+  )) %>% 
+  mutate(hjust = case_when(
+    context == "mCG" ~ 1.2,
+    T ~ -0.2
+  )) %>% 
+  mutate(tissue_genotype = paste(tissue, genotype, sep = "\n")) %>%  
+  mutate(category = factor(category, levels = c(
+    "zygote siren loci", 
+    "zygote siRNA NOT siren loci", 
+    "seedling siRNA loci"
+  ))) %>% 
+  ggplot(aes(x = category)) +
+  facet_grid(tissue_genotype ~ context, switch = "both") + 
+   geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median, fill = category), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = category, xend = category,  y = Q3, yend = UL)) +
+  geom_segment(aes(x = category, xend = category,  y = Q1, yend = LL)) +
+  geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.3, size = 1) + 
+  geom_text(aes(label = grouping, y = pos, hjust = hjust), 
+            vjust = -0.2, size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("violetred4", "grey20", "seagreen"),
+                    limits = c("zygote siren loci", 
+                               "zygote siRNA NOT siren loci", 
+                               "seedling siRNA loci")) + 
+  scale_y_continuous(breaks = c(0, 0.5, 1)) + 
+  guides(fill = guide_legend(title.position = "top",
+                             title.hjust = 0.5)) +
+  labs(x = NULL, 
+       y = NULL,
+       fill = "locus category") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14, face = "bold", colour = "black"),
+    axis.text = element_text(colour = "black"), 
+    axis.text.y = element_blank(), 
+    strip.placement = "outside",
+    strip.text.y.left = element_text(face = "bold", angle = 0, hjust = 0.5),
+    panel.spacing = unit(1, "lines"),
+    axis.line = element_line(size = 1),
+    legend.position = "top"
+  ) +
+  coord_flip()  
+
+em_plot
+```
+
+## endosperm 
+```{r}
+en_plot <- meth_en_data_nice_ss %>% 
+  inner_join(en_results, by = c("category", "context", "genotype")) %>% 
+  mutate(pos = case_when(
+    context == "mCG" ~ Q1,
+    genotype == "drm2" & context == "mCHH" ~ UL, 
+    T ~ Q3
+  )) %>% 
+  mutate(hjust = case_when(
+    context == "mCG" ~ 1.2,
+    T ~ -0.2
+  )) %>% 
+  mutate(tissue_genotype = paste(tissue, genotype, sep = "\n")) %>%  
+  mutate(category = factor(category, levels = c(
+    "endosperm siren loci", 
+    "endosperm siRNA NOT siren loci", 
+    "seedling siRNA loci"
+  ))) %>% 
+  ggplot(aes(x = category)) +
+  facet_grid(tissue_genotype ~ context, switch = "both") + 
+   geom_crossbar(aes(ymin = Q1, ymax = Q3, y = median, fill = category), width = 0.7, alpha = 0.8) +
+  geom_segment(aes(x = category, xend = category,  y = Q3, yend = UL)) +
+  geom_segment(aes(x = category, xend = category,  y = Q1, yend = LL)) +
+  geom_errorbar(aes(ymin = UL, ymax = UL), width = 0.3, size = 1) +
+  geom_errorbar(aes(ymin = LL, ymax = LL), width = 0.3, size = 1) +
+  geom_text(aes(label = grouping, y = pos, hjust = hjust), 
+            vjust = -0.2, size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("lightgoldenrod4", "grey20", "seagreen"),
+                    limits = c(
+                      "endosperm siren loci", 
+                      "endosperm siRNA NOT siren loci", 
+                      "seedling siRNA loci"
+                    )) + 
+  scale_y_continuous(breaks = c(0, 0.5, 1)) + 
+  guides(fill = guide_legend(title.position = "top",
+                             title.hjust = 0.5)) +
+  labs(x = NULL, 
+       y = NULL,
+       fill = "locus category") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14, face = "bold", colour = "black"),
+    axis.text = element_text(colour = "black"), 
+    axis.text.y = element_blank(), 
+    strip.placement = "outside",
+    strip.text.y.left = element_text(face = "bold", angle = 0, hjust = 0.5),
+    panel.spacing = unit(1, "lines"),
+    axis.line = element_line(size = 1),
+    legend.position = "top"
+  ) +
+  coord_flip()  
+
+en_plot
+```
+
+## putting them together
+```{r}
+plot_grid(ov_plot, egg_plot, 
+          ncol = 1, rel_heights = c(0.35, 1),
+          axis = "lr",
+          align = "v") 
+
+ggsave("siren_loci_meth_ov_egg.svg", height = 9, width = 8)
+ggsave("siren_loci_meth_ov_egg.png", height = 9, width = 8)
+```
+
+```{r}
+plot_grid(zy_plot, em_plot, en_plot, 
+          ncol = 1, rel_heights = c(1, 1, 1),
+          axis = "lr",
+          align = "v") 
+
+ggsave("siren_loci_meth_zemen.svg", height = 11, width = 8)
+ggsave("siren_loci_meth_zemen.png", height = 11, width = 8)
+```
+
