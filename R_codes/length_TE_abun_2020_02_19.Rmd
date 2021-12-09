@@ -833,10 +833,10 @@ annotate_TE2 <-  data.frame(
   ) %>% 
   mutate(category = "Gypsy") %>% 
   mutate(sample_type = "zygote" ) %>% 
-  mutate(pro_24 = 0.36) %>% 
-  mutate(text = "0") %>% 
+  mutate(pro_24 = 0.25) %>% 
+  mutate(text = "< 2.2e-16") %>% 
   mutate(vjust = 6)%>% 
-  mutate(hjust = -0.4)
+  mutate(hjust = -0.04)
 
 annotate_TE4 <-  data.frame(
     xmin = 4.1,
@@ -844,7 +844,7 @@ annotate_TE4 <-  data.frame(
   ) %>% 
   mutate(category = "Gypsy") %>% 
   mutate(sample_type = "zygote" ) %>% 
-  mutate(pro_24 = 0.18) %>% 
+  mutate(pro_24 = 0.12) %>% 
   mutate(text = "9e-7") %>% 
   mutate(vjust = 2)%>% 
   mutate(hjust = -0.08)
@@ -855,7 +855,7 @@ annotate_TE5 <-  data.frame(
   ) %>% 
   mutate(category = "Gypsy") %>% 
   mutate(sample_type = "seedling" ) %>% 
-  mutate(pro_24 = 0.12) %>% 
+  mutate(pro_24 = 0.08) %>% 
   mutate(text = "9e-4") %>% 
   mutate(vjust = 2)%>% 
   mutate(hjust = -0.08)
@@ -940,10 +940,10 @@ annotate_TE2_sirenF <-  data.frame(
   ) %>% 
   mutate(category = "Gypsy\n(siren siRNAs excluded)") %>% 
   mutate(sample_type = "zygote" ) %>% 
-  mutate(pro_24_sirenF = 0.36) %>% 
-  mutate(text = "0") %>% 
+  mutate(pro_24_sirenF = 0.25) %>% 
+  mutate(text = "< 2.2e-16") %>% 
   mutate(vjust = 6)%>% 
-  mutate(hjust = -0.4)
+  mutate(hjust = -0.04)
 
 annotate_TE4_sirenF <-  data.frame(
     xmin = 4.1,
@@ -951,7 +951,7 @@ annotate_TE4_sirenF <-  data.frame(
   ) %>% 
   mutate(category = "Gypsy\n(siren siRNAs excluded)") %>% 
   mutate(sample_type = "zygote" ) %>% 
-  mutate(pro_24_sirenF = 0.18) %>% 
+  mutate(pro_24_sirenF = 0.12) %>% 
   mutate(text = "2e-9") %>% 
   mutate(vjust = 2)%>% 
   mutate(hjust = -0.08)
@@ -962,7 +962,7 @@ annotate_TE5_sirenF <-  data.frame(
   ) %>% 
   mutate(category = "Gypsy\n(siren siRNAs excluded)") %>% 
   mutate(sample_type = "seedling" ) %>% 
-  mutate(pro_24_sirenF = 0.12) %>% 
+  mutate(pro_24_sirenF = 0.08) %>% 
   mutate(text = "8e-12") %>% 
   mutate(vjust = 2)%>% 
   mutate(hjust = -0.08)
@@ -1080,10 +1080,10 @@ annotate_egg_NOT1 <- data.frame(
   ) %>% 
   mutate(category = "E loci - Z loci") %>% 
   mutate(sample_type = "egg" ) %>% 
-  mutate(pro_24 = 0.15) %>% 
-  mutate(text = "P = 0") %>% 
+  mutate(pro_24 = 0.1) %>% 
+  mutate(text = "< 2.2e-16") %>% 
   mutate(vjust = -0.2) %>% 
-  mutate(hjust = -0.4) %>% 
+  mutate(hjust = -0.1) %>% 
   mutate(height = 1)
 
 annotate_zygote_NOT1 <- data.frame(
@@ -1092,10 +1092,10 @@ annotate_zygote_NOT1 <- data.frame(
   ) %>% 
   mutate(category = "Z loci - E loci") %>% 
   mutate(sample_type = "egg" ) %>% 
-  mutate(pro_24 = 0.15) %>% 
-  mutate(text = "P = 0") %>% 
+  mutate(pro_24 = 0.1) %>% 
+  mutate(text = "< 2.2e-16") %>% 
   mutate(vjust = -0.2) %>% 
-  mutate(hjust = -0.4) %>% 
+  mutate(hjust = -0.1) %>% 
   mutate(height = 1)
 
 annotate_NOT <- rbind(
@@ -1180,8 +1180,8 @@ annotate_egg_NOT1_sirenF <- data.frame(
   ) %>% 
   mutate(category = "E loci - Z loci\n(siren siRNAs excluded)") %>% 
   mutate(sample_type = "egg" ) %>% 
-  mutate(pro_24_sirenF = 0.25) %>% 
-  mutate(text = "P = 0") %>% 
+  mutate(pro_24_sirenF = 0.2) %>% 
+  mutate(text = "< 2.2e-16") %>% 
   mutate(vjust = -0.8) %>% 
   mutate(hjust = -0.1) %>% 
   mutate(height = 2)
@@ -1192,10 +1192,10 @@ annotate_zygote_NOT1_sirenF <- data.frame(
   ) %>% 
   mutate(category = "Z loci - E loci\n(siren siRNAs excluded)") %>% 
   mutate(sample_type = "egg" ) %>% 
-  mutate(pro_24_sirenF = 0.25) %>% 
-  mutate(text = "P = 0") %>% 
+  mutate(pro_24_sirenF = 0.2) %>% 
+  mutate(text = "< 2.2e-16") %>% 
   mutate(vjust = -0.8) %>% 
-  mutate(hjust = -0.4) %>% 
+  mutate(hjust = -0.1) %>% 
   mutate(height = 2)
 
 annotate_NOT_sirenF <- rbind(
@@ -1475,9 +1475,9 @@ est_spec_24_sirenF_logit$contrasts %>%
   select(contrast, category, p.value)
 ```
 
-* egg spec: egg - zygote: P = 0
-* seedling spec: egg - zygote: P = 0
-* sperm spec: sperm - zygote: P = 0
+* egg spec: egg - zygote: < 2.2e-16
+* seedling spec: egg - zygote: < 2.2e-16
+* sperm spec: sperm - zygote: < 2.2e-16
 
 
 ## plot 
@@ -1575,7 +1575,7 @@ annotate_egg_spec1_sirenF <- data.frame(
   mutate(category = "egg-signature loci\n(siren siRNAs excluded)") %>% 
   mutate(sample_type = "egg" ) %>% 
   mutate(pro_24_sirenF = 0.1) %>% 
-  mutate(text = "P = 0") %>% 
+  mutate(text = "< 2.2e-16") %>% 
   mutate(vjust = -1.2) %>% 
   mutate(hjust = -0.1) %>% 
   mutate(height = 1)
@@ -1588,7 +1588,7 @@ annotate_seedling_spec1_sirenF <- data.frame(
   mutate(category = "seedling-signature loci\n(siren siRNAs excluded)") %>% 
   mutate(sample_type = "egg" ) %>% 
   mutate(pro_24_sirenF = 0.15) %>% 
-  mutate(text = "P = 0") %>% 
+  mutate(text = "< 2.2e-16") %>% 
   mutate(vjust = -1.2) %>% 
   mutate(hjust = -0.1) %>% 
   mutate(height = 1)
@@ -1599,8 +1599,8 @@ annotate_sperm_spec1_sirenF <- data.frame(
   ) %>% 
   mutate(category = "sperm-signature loci\n(siren siRNAs excluded)") %>% 
   mutate(sample_type = "sperm" ) %>% 
-  mutate(pro_24_sirenF = 0.28) %>% 
-  mutate(text = "P = 0") %>% 
+  mutate(pro_24_sirenF = 0.15) %>% 
+  mutate(text = "< 2.2e-16") %>% 
   mutate(vjust = -8) %>% 
   mutate(hjust = -0.1) %>% 
   mutate(height = 1.5)

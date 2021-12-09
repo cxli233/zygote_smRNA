@@ -348,7 +348,7 @@ dist_PC1 <- gene_dist_PC %>%
   )) %>% 
   ggplot(aes(x = PC1, y = median/1000)) +
   geom_point(aes(fill = ID, color = type2), shape = 21, alpha = 0.8, size = 3) +
-  annotate(geom = "text", label = "rho = -0.97\nP = 0",
+  annotate(geom = "text", label = "rho = -0.97\nP < 2.2e-16",
            size = 3.5, x = Inf, y = Inf, hjust = 1.1, vjust = 1.2,
            fontface = "bold") + 
   scale_fill_manual(values = c("white", "gold","orange2","blue2", "seagreen", "grey20",
@@ -384,7 +384,7 @@ length_PC2 <- gene_dist_PC %>%
   )) %>% 
   ggplot(aes(x = PC2, y = medianL)) +
   geom_point(aes(fill = ID, color = type2), shape = 21, alpha = 0.8, size = 3) +
-  annotate(geom = "text", label = "rho = 0.91\nP = 0",
+  annotate(geom = "text", label = "rho = 0.91\nP < 2.2e-16",
            size = 3.5, x = -Inf, y = Inf, hjust = -0.1, vjust = 1.2,
            fontface = "bold") + 
   scale_fill_manual(values = c("white", "gold","orange2","blue2", "seagreen", "grey20",
@@ -609,7 +609,7 @@ Gypsy_PC1 <- cor_data %>%
 mCHH_PC1 <- cor_data %>% 
   ggplot(aes(x = PC1, y = mCHH)) +
   geom_point(aes(fill = ID), shape = 21, alpha = 0.8, size = 3, color = "white") +
-  annotate(geom = "text", label = "rho = 0.96\nP = 0;003",
+  annotate(geom = "text", label = "rho = 0.96\nP = 0.003",
            size = 3.5, x = -Inf, y = Inf, hjust = -0.1, vjust = 1.2,
            fontface = "bold") + 
   scale_fill_manual(values = c( "seagreen", "grey20",
